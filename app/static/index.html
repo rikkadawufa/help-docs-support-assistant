@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cinderpeak Help Center (demo)</title>
+<link rel="stylesheet" href="/static/widget.css">
+</head>
+<body>
+<header class="site-nav">
+  <div class="logo">CINDER<span>PEAK</span></div>
+  <nav><span>Stoves</span><span>Lanterns</span><span>Coolers</span><span>Sleep</span><span>Help</span></nav>
+  <span class="demo-tag">Fictional demo store</span>
+</header>
+
+<section class="hero">
+  <h1>How can we help?</h1>
+  <p>Returns, warranty, shipping and product questions. Our assistant answers from our help documents and shows where each answer comes from.</p>
+</section>
+<section class="topics">
+  <div class="topic"><b>Returns</b><small>Return window, refunds, fees</small></div>
+  <div class="topic"><b>Warranty</b><small>Coverage by product, claims</small></div>
+  <div class="topic"><b>Shipping</b><small>Rates, delivery times, Canada</small></div>
+</section>
+
+<aside class="widget" aria-label="Support chat">
+  <div class="w-head">
+    <div class="w-avatar">C</div>
+    <div><b>Cinderpeak Support</b><small>AI assistant &middot; answers only from our help docs</small></div>
+  </div>
+  <div class="w-body" id="log">
+    <div class="msg bot"><div class="text">Hi! Ask me about returns, warranty, shipping or how to use your gear. If our help docs don't cover it, I'll pass your question to our team.</div></div>
+  </div>
+  <div class="w-foot">
+    <form class="w-form" id="form">
+      <input id="q" autocomplete="off" maxlength="1000" placeholder="Type your question" aria-label="Your question">
+      <button type="submit">Send</button>
+    </form>
+    <button type="button" class="human" id="human">Talk to a person</button>
+    <div class="w-note">Demo with made-up store documents. Nothing here is a real order.</div>
+  </div>
+</aside>
+
+<script src="/static/widget.js"></script>
+<script>
+const log = document.getElementById("log");
+const input = document.getElementById("q");
+let lastQuestion = "";
+
+function scrollDown() { log.scrollTop = log.scrollHeight; }
+
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = input.value.trim();
+  if (!question) return;
+  lastQuestion = question;
+  input.value = "";
+  log.append(el("div", "msg user", question));
+  const typing = el("div", "typing", "Checking our help docs…");
+  log.append(typing); scrollDown();
+  try {
+    const reply = await postJSON("/ask", { question, mode: "grounded" });
+    const box = renderReply(reply);
+    typing.replaceWith(box);
+    // ?expand=1 opens the first source right away (used for screenshots)
+    const first = box.querySelector(".src");
+    if (first && new URLSearchParams(location.search).get("expand")) first.click();
+  } catch {
+    typing.replaceWith(renderReply({ status: "degraded", answer: "Something went wrong on our side. Please try again in a moment." }));
+  }
+  scrollDown();
+});
+
+document.getElementById("human").addEventListener("click", async () => {
+  const question = lastQuestion || prompt("What do you need help with?") || "";
+  if (!question.trim()) return;
+  log.append(el("div", "msg user", "Talk to a person"));
+  try {
+    const res = await postJSON("/handoff", { question, note: "Customer clicked 'Talk to a person'" });
+    log.append(renderReply({ status: "handoff", answer: res.message }));
+  } catch {
+    log.append(renderReply({ status: "degraded", answer: "We couldn't reach the team right now. Please email support@cinderpeak.example." }));
+  }
+  scrollDown();
+});
+
+const preset = new URLSearchParams(location.search).get("q");
+if (preset) { input.value = preset; document.getElementById("form").requestSubmit(); }
+</script>
+</body>
+</html>

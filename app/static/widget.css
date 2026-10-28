@@ -1,0 +1,100 @@
+:root {
+  --bg: #f4f1ea;
+  --ink: #1f2a24;
+  --muted: #6b7568;
+  --line: #ddd7ca;
+  --card: #ffffff;
+  --brand: #2f5d46;
+  --brand-ink: #ffffff;
+  --accent: #c8642c;
+  --bot: #f1efe8;
+  --ok: #2f7d4f;
+  --warn: #b5651d;
+  --bad: #b23a3a;
+  --mark: #fde8a8;
+  --radius: 14px;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.5; }
+button { font: inherit; cursor: pointer; }
+
+/* ---------- fake store page behind the widget ---------- */
+.site-nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 40px; border-bottom: 1px solid var(--line); background: #fbfaf6; }
+.logo { font-weight: 800; letter-spacing: .02em; font-size: 19px; color: var(--brand); }
+.logo span { color: var(--accent); }
+.site-nav nav { display: flex; gap: 26px; color: var(--muted); font-size: 14px; }
+.demo-tag { font-size: 12px; color: var(--muted); border: 1px dashed var(--line); padding: 3px 9px; border-radius: 99px; }
+.hero { padding: 64px 40px 40px; max-width: 760px; }
+.hero h1 { font-size: 40px; line-height: 1.12; margin: 0 0 14px; }
+.hero p { color: var(--muted); font-size: 17px; max-width: 520px; margin: 0; }
+.topics { display: grid; grid-template-columns: repeat(3, minmax(0, 200px)); gap: 14px; padding: 0 40px; }
+.topic { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.topic b { display: block; margin-bottom: 4px; }
+.topic small { color: var(--muted); }
+
+/* ---------- chat widget ---------- */
+.widget { position: fixed; right: 28px; bottom: 28px; width: 400px; height: min(640px, calc(100vh - 56px));
+  display: flex; flex-direction: column; background: var(--card); border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgba(31, 42, 36, .22), 0 2px 6px rgba(31, 42, 36, .08); overflow: hidden; }
+.w-head { background: var(--brand); color: var(--brand-ink); padding: 14px 18px; display: flex; align-items: center; gap: 12px; }
+.w-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.16); display: grid; place-items: center; font-weight: 700; }
+.w-head b { display: block; font-size: 15px; }
+.w-head small { opacity: .8; font-size: 12px; }
+.w-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 88%; padding: 10px 13px; border-radius: 12px; white-space: pre-wrap; }
+.msg.user { align-self: flex-end; background: var(--brand); color: var(--brand-ink); border-bottom-right-radius: 4px; }
+.msg.bot { align-self: flex-start; background: var(--bot); border-bottom-left-radius: 4px; }
+.msg.bot.handoff { background: #fff4e8; border: 1px solid #f1d2b0; }
+.msg.bot.degraded { background: #fbeaea; border: 1px solid #ecc4c4; }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; letter-spacing: .02em;
+  text-transform: uppercase; margin-bottom: 6px; color: var(--muted); }
+.badge.ok { color: var(--ok); }
+.badge.warn { color: var(--warn); }
+.badge.bad { color: var(--bad); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.sources { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.src { text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 9px; padding: 7px 10px; font-size: 13px; }
+.src .label { font-weight: 600; color: var(--brand); }
+.src .quote { color: var(--muted); display: block; margin-top: 2px; }
+.src .full { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--ink); white-space: pre-wrap; font-size: 12.5px; max-height: 220px; overflow-y: auto; }
+.src.open .full { display: block; }
+mark { background: var(--mark); padding: 0 1px; border-radius: 2px; }
+.w-foot { border-top: 1px solid var(--line); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.w-form { display: flex; gap: 8px; }
+.w-form input { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; }
+.w-form input:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+.w-form button { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 10px; padding: 0 16px; font-weight: 600; }
+.human { background: none; border: 0; color: var(--accent); font-weight: 600; font-size: 13px; padding: 2px; align-self: flex-start; }
+.w-note { font-size: 11px; color: var(--muted); text-align: center; }
+.typing { color: var(--muted); font-size: 13px; font-style: italic; }
+
+/* ---------- compare page ---------- */
+.cmp { max-width: 1120px; margin: 0 auto; padding: 32px 28px 48px; }
+.cmp h1 { font-size: 26px; margin: 0 0 6px; }
+.cmp .sub { color: var(--muted); margin: 0 0 20px; }
+.cmp-form { display: flex; gap: 10px; margin-bottom: 12px; }
+.cmp-form input { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font: inherit; font-size: 16px; }
+.cmp-form button { background: var(--brand); color: #fff; border: 0; border-radius: 10px; padding: 0 22px; font-weight: 600; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.presets button { background: #fff; border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; font-size: 13px; color: var(--ink); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.col { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; min-height: 260px; }
+.col h2 { font-size: 15px; margin: 0 0 2px; }
+.col .desc { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.col .answer { white-space: pre-wrap; }
+.col.before { border-top: 4px solid #a3a3a3; }
+.col.after { border-top: 4px solid var(--brand); }
+.slack-note { margin-top: 12px; font-size: 13px; color: var(--warn); }
+
+@media (max-width: 760px) {
+  .site-nav { padding: 14px 16px; }
+  .site-nav nav { display: none; }
+  .hero { padding: 32px 16px 20px; }
+  .hero h1 { font-size: 30px; }
+  .topics { grid-template-columns: 1fr; padding: 0 16px 760px; }
+  .widget { right: 8px; left: 8px; bottom: 8px; width: auto; }
+  .cmp { padding: 20px 16px; }
+  .cols { grid-template-columns: 1fr; }
+}

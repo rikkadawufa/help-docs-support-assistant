@@ -1,0 +1,19 @@
+{
+  "note": "Used only to choose RELEVANCE_MIN. Not scored and does not overlap with questions.json. K7-K14 were added after round 1 because K1-K6 were too keyword-like: real customers phrase things casually.",
+  "questions": [
+    {"id": "K1", "answerable": true,  "question": "What payment methods do you take?"},
+    {"id": "K2", "answerable": true,  "question": "How long does the Halo lantern take to charge?"},
+    {"id": "K3", "answerable": true,  "question": "Can I cancel an order I placed 20 minutes ago?"},
+    {"id": "K4", "answerable": false, "question": "Do you have a mobile app?"},
+    {"id": "K5", "answerable": false, "question": "Can you gift wrap my order?"},
+    {"id": "K6", "answerable": false, "question": "Can I book a guided camping trip with you?"},
+    {"id": "K7", "answerable": true,  "question": "hey can i take my volt power bank on a plane?"},
+    {"id": "K8", "answerable": true,  "question": "Lost the gift card my sister gave me, anything I can do?"},
+    {"id": "K9", "answerable": true,  "question": "how many points do I get for spending a hundred bucks"},
+    {"id": "K10", "answerable": true, "question": "If I order at 4pm will it go out today?"},
+    {"id": "K11", "answerable": true, "question": "Is the cooler ok to clean with bleach?"},
+    {"id": "K12", "answerable": false, "question": "Can I pay in monthly installments?"},
+    {"id": "K13", "answerable": false, "question": "Does the Glacier 45 come in other colors?"},
+    {"id": "K14", "answerable": false, "question": "Who designed your logo?"}
+  ]
+}

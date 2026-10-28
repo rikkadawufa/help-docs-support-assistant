@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baseline vs grounded (demo)</title>
+<link rel="stylesheet" href="/static/widget.css">
+</head>
+<body>
+<main class="cmp">
+  <h1>Same question, same documents, two assistants</h1>
+  <p class="sub">Left: a deliberately simple RAG written for this demo. Right: the grounded assistant with a relevance gate, checked citations and handoff. Store and documents are fictional.</p>
+  <form class="cmp-form" id="form">
+    <input id="q" autocomplete="off" maxlength="1000" placeholder="Ask both assistants" aria-label="Question">
+    <button type="submit">Ask both</button>
+  </form>
+  <div class="presets" id="presets"></div>
+  <div class="cols">
+    <section class="col before"><h2>Simple RAG (before)</h2><p class="desc">Retrieves passages and answers. No threshold, no citation check, no handoff.</p><div id="left"></div></section>
+    <section class="col after"><h2>This assistant (after)</h2><p class="desc">Answers only with a citation it can verify. Otherwise it hands off.</p><div id="right"></div></section>
+  </div>
+</main>
+<script src="/static/widget.js"></script>
+<script>
+const PRESETS = [
+  "Do you price match if I find the Ember 2 cheaper somewhere else?",
+  "Can I charge the Halo lantern with a solar panel?",
+  "What's the warranty on the Glacier 45 cooler?",
+  "How much is standard shipping on a $50 order in the US?",
+];
+const input = document.getElementById("q");
+const presets = document.getElementById("presets");
+for (const p of PRESETS) {
+  const b = el("button", "", p); b.type = "button";
+  b.addEventListener("click", () => { input.value = p; run(p); });
+  presets.append(b);
+}
+
+async function fill(target, mode, question) {
+  target.textContent = "";
+  target.append(el("div", "typing", "Thinking…"));
+  try {
+    const r = await postJSON("/ask", { question, mode });
+    target.textContent = "";
+    target.append(badge(r.status), el("div", "answer", r.answer));
+    if (r.citations && r.citations.length) target.append(sourceList(r.citations));
+    if (r.status === "handoff" || r.status === "degraded") target.append(el("div", "slack-note", "\u{1F514} Support team alerted in Slack (" + r.reason + ")"));
+  } catch { target.textContent = "Request failed."; }
+}
+
+function run(question) {
+  fill(document.getElementById("left"), "baseline", question);
+  fill(document.getElementById("right"), "grounded", question);
+}
+
+document.getElementById("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (input.value.trim()) run(input.value.trim());
+});
+
+const preset = new URLSearchParams(location.search).get("q");
+if (preset) { input.value = preset; run(preset); }
+</script>
+</body>
+</html>

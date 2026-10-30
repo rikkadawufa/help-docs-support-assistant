@@ -1,120 +1,120 @@
-# 驗證紀錄（實際跑過什麼、結果、待決定）
+# Verification log (what was run, results, open decisions)
 
-> 本檔只記實際執行過的結果。模型：`gpt-4o-mini`；embedding：`text-embedding-3-small`。文件與題目全部虛構。
+> This file records only results from runs that actually happened. Model: `gpt-4o-mini`; embeddings: `text-embedding-3-small`. All documents and questions are fictional.
 
-## 環境
-- Python 3.12.10，套件裝在 `demo/.venv`，版本見 `requirements.txt`
-- 2026-10-29 使用者同意安裝；`.env` 的 OpenAI key、Slack webhook 由使用者填入，我沒有讀取或印出
+## Environment
+- Python 3.12.10, packages installed in `demo/.venv`, versions in `requirements.txt`
+- The user approved the install on 2026-10-29. The user filled in the OpenAI key and Slack webhook in `.env`; I never read or printed them
 
-## 與 SPEC 的差異（實作時決定）
-| 項目 | SPEC | 實際 | 原因 |
+## Differences from SPEC (decided during implementation)
+| Item | SPEC | Actual | Why |
 |---|---|---|---|
-| PDF 載入 | `langchain-community` 的 `PyMuPDFLoader` | 直接用 PyMuPDF 讀頁面，再包成 LangChain `Document` | `langchain-community` 在 import 時發出「停止維護」警告，作品集不該依賴它。已從 requirements 移除並解除安裝，34 個測試照樣通過 |
-| 檢索、決策函式的位置 | `app/retrieve.py`、`answer.py` 的 `decide()` | 檢索放在 `app/store.py`，`decide()` 放在 `app/citations.py` | 檢索和 store 共用設定；`decide()` 是純函式，和引用檢查放一起方便測 |
-| 啟動伺服器 | `uvicorn app.server:app` | `python scripts/serve.py [--live] [--slack]` | 用 factory 避免 import 時就開 Chroma |
-| v1／v2 切換 | 重新產生 v1 | `make_docs.py` 同時把 v1、v2 存進 `knowledge_updates/`，切換時直接複製 | PyMuPDF 每次產生的 PDF hash 都不同，重新產生會讓其他 7 份 PDF 也被判定為「已更新」 |
-| 門檻規則 | 用校正題取中點，之後不再調 | 第 2 輪起改成「校正題中有答案的最低分減 0.05」，只用來擋明顯離題的問題 | 見下方第 1 輪檢討 |
-| 引用比對 | 正規化後的連續子字串 | 第 2 輪起逐句比對；第 3 版起忽略版面標點（冒號、逗號、表格的 `|`），**文字仍須逐字相符** | 見下方檢討 |
-| PDF 表格 | 未指定 | 第 3 版起用 `find_tables()` 辨識表格，每列存成 `cell | cell | cell` | 見下方檢討 |
-| 評測輪數 | 最多 2 輪 | 跑了 3 輪 | 第 3 輪超出 SPEC 上限，使用者 2026-10-29 同意後才跑 |
+| PDF loading | `PyMuPDFLoader` from `langchain-community` | Read pages with PyMuPDF directly, then wrap them in LangChain `Document`s | `langchain-community` prints a deprecation warning on import, and a portfolio piece shouldn't depend on it. Removed from requirements and uninstalled; all 34 tests still pass |
+| Where retrieval and the decision function live | `app/retrieve.py`, `decide()` in `answer.py` | Retrieval is in `app/store.py`, `decide()` is in `app/citations.py` | Retrieval shares settings with the store; `decide()` is a pure function and is easier to test next to the citation checks |
+| Starting the server | `uvicorn app.server:app` | `python scripts/serve.py [--live] [--slack]` | A factory avoids opening Chroma at import time |
+| v1/v2 switch | Regenerate v1 | `make_docs.py` saves both v1 and v2 to `knowledge_updates/`, and the switch just copies one over | PyMuPDF produces a different hash every time it generates a PDF, so regenerating would mark the other 7 PDFs as "updated" too |
+| Threshold rule | Take the midpoint from the calibration questions, then never change it | From round 2: "the lowest score among answerable calibration questions minus 0.05", used only to block clearly off-topic questions | See the round 1 review below |
+| Citation matching | Continuous substring after normalization | From round 2, matched sentence by sentence; from version 3, layout punctuation (colons, commas, table `|`) is ignored, but **the words must still match exactly** | See the reviews below |
+| PDF tables | Not specified | From version 3, `find_tables()` detects tables and each row is stored as `cell | cell | cell` | See the reviews below |
+| Number of eval rounds | At most 2 | 3 rounds run | Round 3 went past the SPEC limit and was run only after the user approved it on 2026-10-29 |
 
-## 文件與陷阱題檢查
-- `make_docs.py`：8 份 PDF、8 份 Markdown，以及 returns policy 的 v1、v2
-- 陷阱關鍵詞（price match、rent、military、student、retail store、solar、stock、mobile app、gift wrap、guided trip 等）在所有文件中命中 **0** 筆
+## Document and trap question checks
+- `make_docs.py`: 8 PDFs and 8 Markdown files, plus v1 and v2 of the returns policy
+- Trap keywords (price match, rent, military, student, retail store, solar, stock, mobile app, gift wrap, guided trip, and others) have **0** hits across all documents
 
-## 單元測試
-- `pytest`：**34 passed**（引用檢查、逐句與標點寬鬆比對、決策表、門檻以下不呼叫模型、manifest 增量、畸形輸出、API 422／降級 200／Slack 失敗仍 200／source 404）
+## Unit tests
+- `pytest`: **34 passed** (citation checks, sentence-by-sentence and punctuation-tolerant matching, the decision table, no model call below the threshold, incremental manifest, malformed output, API 422 / degraded 200 / 200 even when Slack fails / source 404)
 
 ## Mock E2E
-- `LLM_MODE=mock`：ingest → A–D 兩種模式 → E → F → collect_results 全部跑完，格式正確。mock 不看分數
+- `LLM_MODE=mock`: ingest → A–D in both modes → E → F → collect_results all ran to the end with correct formats. Scores aren't checked in mock mode
 
-## 第 1 輪（live，2026-10-29，log 在 `output/round1/`）
-- 校正：K1–K6，有答案的最低 0.633，沒答案的最高 0.370，取中點，`RELEVANCE_MIN=0.50`
-- 結果：A+B **4/12**、陷阱題作答 **0/6**、C+D 轉人工 **9/9**
-- 檢討（太保守）：
-  1. 門檻太高。K1–K6 都是關鍵字很明確的問題，但測試題是口語問法，分數只有 0.31–0.49，A1、A2、A3、A6、B2 還沒進模型就被擋下。另外，陷阱題的分數（0.30–0.59）和有答案的題目重疊，門檻本來就分不開這兩種
-  2. A5：模型把同一段的兩句話接成一個引用，中間跳過一句，連續子字串比對沒過
-  3. A4、A8：文件明文寫著「不行」或「只寄美加」，模型仍拒答，原因是 prompt 規則寫得太嚴
-  4. 每頁的頁首頁尾樣板文字稀釋了 embedding
+## Round 1 (live, 2026-10-29, logs in `output/round1/`)
+- Calibration: K1–K6. Lowest answerable score 0.633, highest unanswerable 0.370, midpoint gives `RELEVANCE_MIN=0.50`
+- Results: A+B **4/12**, trap questions answered **0/6**, C+D handed off **9/9**
+- Review (too conservative):
+  1. The threshold was too high. K1–K6 all used clear keywords, but the test questions are phrased casually and only scored 0.31–0.49, so A1, A2, A3, A6, and B2 were blocked before reaching the model. Also, the trap questions' scores (0.30–0.59) overlap with the answerable ones, so a threshold can't separate the two anyway
+  2. A5: the model joined two sentences from the same passage into one quote, skipping a sentence in between, so the continuous substring check failed
+  3. A4, A8: the documents say plainly "no" or "US and Canada only", but the model still declined because the prompt rules were too strict
+  4. Header and footer boilerplate on every page diluted the embeddings
 
-## 第 2 輪（live，log `20261029-043234-*`）
-- 修正：
-  - prompt 改成「文件明文寫的『不』可以回答，文件沒提到的不能當成『不』」
-  - 引用改成逐句比對
-  - 移除頁首頁尾，每段開頭加文件標題，chunk 改成 500／80
-  - 校正題加入 K7–K14 共 8 題新的口語題（不碰測試題）
-  - 門檻規則改成「有答案的最低分減 0.05」，算出 `RELEVANCE_MIN=0.39`，門檻本身擋掉 4/6 題沒答案的問題
-- 結果：A+B **9/12**、陷阱題作答 **0/6**、C+D 轉人工 **9/9**
-- 剩下 3 題（A3、B1、B3）都是 `no_valid_citation`，事實正確，但引用格式和原文對不上：
-  - B1、B3：PDF 表格被抽成一格一行，模型自己重組成 "Coolers, Glacier 45, 5 years"，或跳過同一格裡的前半段
-  - A3：模型在標題後面自己加了冒號
+## Round 2 (live, logs `20261029-043234-*`)
+- Fixes:
+  - The prompt now says a "no" stated in the documents can be answered, but something the documents don't mention can't be treated as "no"
+  - Citations are matched sentence by sentence
+  - Headers and footers removed, the document title added to the start of each chunk, chunks changed to 500/80
+  - 8 new casually phrased calibration questions, K7–K14 (none taken from the test questions)
+  - New threshold rule, "lowest answerable score minus 0.05", giving `RELEVANCE_MIN=0.39`; the threshold alone blocks 4 of the 6 unanswerable questions
+- Results: A+B **9/12**, trap questions answered **0/6**, C+D handed off **9/9**
+- The remaining 3 (A3, B1, B3) were all `no_valid_citation`. The facts were right, but the quote format didn't match the source text:
+  - B1, B3: PDF tables were extracted one cell per line, so the model reassembled them as "Coolers, Glacier 45, 5 years" or skipped the first half of a cell
+  - A3: the model added its own colon after a heading
 
-## 第 3 輪（live，log `20261029-044207-*`，作品集以這一輪為準）
-- 修正：
-  - 表格每列存成一行（`Coolers | Glacier 45 | 5 years`）
-  - 引用比對忽略版面標點，但文字仍須逐字相符。新增 4 個測試，包括「7 years 不能過」「跳過同一句裡的字不能過」
-  - 重建索引後用同一規則重新校正，`RELEVANCE_MIN` 仍是 **0.39**
-- 跑之前：`pytest` 34 passed；ingest unchanged 16
-- 結果（程式統計）：
-  - A+B **12/12** 答對，且至少一個有效引用指向正確的檔案和頁碼
-  - 陷阱題作答 **0/6**
-  - C+D 轉人工 **9/9**（3 題被門檻擋下、6 題是模型判定 answerable=false）
-  - 12 題作答裡，沒有任何一個引用被檢查擋掉
-- Baseline：A+B 事實正確 12/12（不附出處）；C／D 9 題等人工標記，標記表見 `eval/baseline-review_繁中.md`
-- 注意：A3、A7、A8 的事實 regex 比較寬（只檢查 no／not／only 這類字），能算通過主要靠「引用必須指向正確頁面」這個條件。三題的實際回答我人工看過，內容都正確：
-  - A3："No, fuel canisters cannot be returned for safety and hygiene reasons."
-  - A7："No, promo codes cannot be combined with each other."
-  - A8："No, we do not ship to any other country."
+## Round 3 (live, logs `20261029-044207-*`; the portfolio uses this round)
+- Fixes:
+  - Each table row is stored as one line (`Coolers | Glacier 45 | 5 years`)
+  - Citation matching ignores layout punctuation, but the words must still match exactly. Added 4 tests, including "7 years must not pass" and "skipping words within the same sentence must not pass"
+  - After rebuilding the index, recalibrated with the same rule; `RELEVANCE_MIN` is still **0.39**
+- Before the run: `pytest` 34 passed; ingest unchanged 16
+- Results (computed by code):
+  - A+B **12/12** correct, each with at least one valid citation pointing to the right file and page
+  - Trap questions answered **0/6**
+  - C+D handed off **9/9** (3 blocked by the threshold, 6 where the model returned answerable=false)
+  - Across the 12 answered questions, the check didn't reject a single citation
+- Baseline: A+B facts correct 12/12 (no sources); the 9 C/D questions were waiting for manual labels, using the worksheet in `eval/baseline-review.md`
+- Note: the fact regexes for A3, A7, and A8 are loose (they only look for words like no/not/only), so passing them depends mainly on the "citation must point to the right page" condition. I read all three actual answers by hand, and they're correct:
+  - A3: "No, fuel canisters cannot be returned for safety and hygiene reasons."
+  - A7: "No, promo codes cannot be combined with each other."
+  - A8: "No, we do not ship to any other country."
 
-## E. 文件更新（live，第 3 版索引，`20261029-043534-scenario-update.jsonl`）
-- v1：ingest unchanged 16 → 回答「30 days」
-- 換成 v2：ingest **updated 1、unchanged 15** → 回答「14 days」，引用 `returns-policy.pdf p.1`
-- 已切回 v1（hash 與 `knowledge_updates/returns-policy-v1.pdf` 相同）
+## E. Document update (live, version 3 index, `20261029-043534-scenario-update.jsonl`)
+- v1: ingest unchanged 16 → answered "30 days"
+- Switched to v2: ingest **updated 1, unchanged 15** → answered "14 days", citing `returns-policy.pdf p.1`
+- Switched back to v1 (hash matches `knowledge_updates/returns-policy-v1.pdf`)
 
-## F. AI 服務故障（live，Slack 模式，`20261029-043542-scenario-llm-error.jsonl`）
-- `CHAT_MODEL=gpt-does-not-exist` → status `degraded`、reason `llm_error`，API 回 200，Slack **sent**
-- 接著用正常模型問 Glacier 45 保固 → answered「5 years」
+## F. AI service outage (live, Slack mode, `20261029-043542-scenario-llm-error.jsonl`)
+- `CHAT_MODEL=gpt-does-not-exist` → status `degraded`, reason `llm_error`, API returned 200, Slack **sent**
+- Then asked about the Glacier 45 warranty with the normal model → answered "5 years"
 
-## 瀏覽器實測（live＋Slack，第 3 版索引）
-- `/`：Glacier 45 保固 → 答「5 years」，出處 `warranty.pdf p.2`，引用 "Coolers | Glacier 45 | 5 years"；展開後顯示原文並標出那一列
-- `/`：「Halo 能用太陽能板充電嗎」→ 轉人工（model_declined），Slack sent
-- 「Talk to a person」→ Slack sent（user_requested）
-- `/compare`：price match 題，baseline 回「Cinderpeak Outdoor does not have a price matching policy...」（文件沒這條，是編的）；正式版轉人工，Slack sent
-- 手機寬度 375px：版面正常，沒有橫向捲動
+## Browser test (live + Slack, version 3 index)
+- `/`: Glacier 45 warranty → answered "5 years", source `warranty.pdf p.2`, quote "Coolers | Glacier 45 | 5 years"; expanding it shows the source text with that row highlighted
+- `/`: "Can the Halo be charged with a solar panel?" → handed off (model_declined), Slack sent
+- "Talk to a person" → Slack sent (user_requested)
+- `/compare`: the price match question; the baseline replied "Cinderpeak Outdoor does not have a price matching policy..." (the documents have no such policy, so it's made up), while the grounded version handed off, Slack sent
+- Mobile width 375px: layout is fine, no horizontal scrolling
 
-## 照實要說的觀察
-- **Baseline 在有答案的題目上很準**：兩輪都是 12/12 事實正確（只是沒附出處）。正式版的優勢在陷阱題和轉人工，不在一般題的答對率。作品集不能寫成「baseline 答錯很多」
-- Baseline 在陷阱題上常寫「we do not offer X」，聽起來像拒答，其實是**編出一條不存在的政策**。規則判斷會把這種算成「作答」，最後以人工標記為準
+## Observations to state honestly
+- **The baseline is accurate on answerable questions**: 12/12 facts correct in both rounds (just without sources). The grounded version's advantage is on trap questions and handoffs, not accuracy on ordinary questions. The portfolio can't claim "the baseline gets a lot wrong"
+- On trap questions the baseline often writes "we do not offer X", which sounds like a decline but actually **invents a policy that doesn't exist**. The rule counts these as "answered", and the manual labels have the final say
 
-- 三輪都是在同一組 21 題上看結果再修正，第 2、3 輪的修正雖然都是通用的（prompt 規則、引用比對、表格處理），但嚴格來說都看過測試題的結果。作品集要寫成「三輪迭代後的結果」，不能把 12/12 說成第一次就達成。要有沒看過的成績，得另外準備一組新題目跑一次
+- All three rounds were fixed after looking at results on the same 21 questions. The round 2 and 3 fixes were general (prompt rules, citation matching, table handling), but strictly speaking they were all made after seeing the test results. The portfolio has to describe this as "the result after three rounds of iteration" and can't present 12/12 as a first-try result. A score on unseen questions would need a new question set and one more run
 
-## Baseline 人工標記（使用者，2026-10-29，定案）
-- 最終標記：C1–C4 answered、C5–C6 declined；D1 answered、D2 declined、D3 declined
-- 與關鍵字規則不一致的題號：C4、D1、D2、D3（以人工為準）
-- 過程：第一次標記時 D1 標 declined、D2 標 answered；討論定義後，使用者把 D1 改成 answered（它用退貨規則拒絕了一個照文件應該走保固申請的客戶，還自己補了「凹痕算正常磨損」），D2 改成 declined（它把問題交給客服，沒有下結論）
-- C4 判 answered 的理由：文件沒有實體門市，它卻順著客戶的話，講得好像網站上查得到門市
-- 結果：baseline 陷阱題作答 **4/6**（C1 比價、C2 租借、C3 軍人折扣、C4 暗示有門市），正式版 **0/6**
-- 使用者回饋：標記的感覺像在抓語病。C 題的標準比較明確（文件沒寫，卻講得像有這條規定）；D 題比較主觀
+## Baseline manual labels (by the user, 2026-10-29, final)
+- Final labels: C1–C4 answered, C5–C6 declined; D1 answered, D2 declined, D3 declined
+- Where the keyword rule disagreed: C4, D1, D2, D3 (manual labels win)
+- Process: in the first pass D1 was labeled declined and D2 answered. After discussing the definitions, the user changed D1 to answered (it used the return rules to turn down a customer who, per the documents, should have gone through a warranty claim, and added on its own that "a dent counts as normal wear") and D2 to declined (it passed the question to support without reaching a conclusion)
+- Why C4 is answered: the documents mention no physical stores, yet it went along with the customer as if store locations could be looked up on the website
+- Result: the baseline answered **4/6** trap questions (C1 price match, C2 rentals, C3 military discount, C4 implied a physical store); the grounded version **0/6**
+- User feedback: labeling felt like nitpicking wording. The C standard is fairly clear (the documents don't say it, but the answer talks as if the rule exists); the D questions are more subjective
 
-## 作品集素材準備（2026-10-29）
-- E、F 用新版 `run_eval.py` 重跑（log 路徑改成相對路徑），結果與之前相同：`20261029-061753-scenario-update.jsonl`、`20261029-061802-scenario-llm-error.jsonl`，Slack sent
-- 驗證 README 的說法「新增文件不用重開伺服器」：伺服器運作中切到 v2 並 ingest（updated 1），透過伺服器的 `/ask` 問，回答「14 days」。之後已切回 v1 並 ingest
-- widget 新增 `?expand=1`（自動展開第一個出處，截圖用），展開後自動捲到被標記的那一行
-- 截圖用 `portfolio/src/shoot_demo.py`，對 live 伺服器截圖，裁切範圍寫在腳本裡。截圖裡的回答是當次的 live 輸出：baseline 那次回「we do not offer price matching for the Ember 2 Camp Stove...」，用詞和評測 log 不同，但都是在編造規定
-- `collect_results.py --summary` 的輸出原樣用在 board 04
+## Portfolio material prep (2026-10-29)
+- Reran E and F with the new `run_eval.py` (log paths now relative); results unchanged: `20261029-061753-scenario-update.jsonl`, `20261029-061802-scenario-llm-error.jsonl`, Slack sent
+- Verified the README's claim that "adding documents doesn't require a server restart": with the server running, switched to v2 and ran ingest (updated 1), then asked through the server's `/ask` and got "14 days". Switched back to v1 and ran ingest afterward
+- Added `?expand=1` to the widget (auto-expands the first source, for screenshots); after expanding it scrolls to the highlighted line
+- Screenshots come from `portfolio/src/shoot_demo.py` against the live server, with crop areas set in the script. The answers in the screenshots are that session's live output: the baseline said "we do not offer price matching for the Ember 2 Camp Stove...", worded differently from the eval log, but both invent a policy
+- The output of `collect_results.py --summary` is used as is on board 04
 
-## 講解影片（2026-10-29）
-- 語音：HeyGen voice `28J6z3XNsqyMvvCqxUiK`，speed 0.9。OAuth 免費額度已用完（"0 seconds of free voice-generation time left"），依 DESIGN §9 改用 `_portfolio-design-system/.env` 的 API key（`make-voice.sh --api`），8 段都用同一個 voice 產生。key 沒有印出，也沒有寫進任何檔案
-- 8 個場景，89.48 秒；BGM 用共用曲目、音量 0.12
-- `hyperframes check`：16:9 和 9:16 都是 0 errors、0 warnings
-- render：`video/help-docs-support-assistant-16x9.mp4`（1920×1080、89.5 s）、`video-reel/help-docs-support-assistant-9x16.mp4`（1080×1920、89.5 s）
-- 抽畫格檢查了 10 個時間點，包括第 0 格、各場景、結尾卡和 flow 的圈選：第 0 格不是空白；16:9 沒有浮水印；9:16 的浮水印在安全點跳位；字幕沒有壓到 board
-- **聲音沒有人耳聽過**：音量平衡、發音（LangChain、Chroma、Cinderpeak）要由使用者實際聽一次
+## Explainer video (2026-10-29)
+- Voice: HeyGen voice `28J6z3XNsqyMvvCqxUiK`, speed 0.9. The OAuth free quota was used up ("0 seconds of free voice-generation time left"), so per DESIGN §9 it switched to the API key in `_portfolio-design-system/.env` (`make-voice.sh --api`), with the same voice for all 8 segments. The key was never printed or written to any file
+- 8 scenes, 89.48 seconds; the shared BGM track at volume 0.12
+- `hyperframes check`: 0 errors and 0 warnings for both 16:9 and 9:16
+- Renders: `video/help-docs-support-assistant-16x9.mp4` (1920×1080, 89.5 s), `video-reel/help-docs-support-assistant-9x16.mp4` (1080×1920, 89.5 s)
+- Checked frames at 10 timestamps, including frame 0, each scene, the end card, and the circled parts of the flow: frame 0 isn't blank, 16:9 has no watermark, the 9:16 watermark jumps between safe positions, and captions don't cover the board
+- **No one has listened to the audio yet**: the user needs to listen once to check volume balance and pronunciation (LangChain, Chroma, Cinderpeak)
 
-## 對照表的決定（使用者，2026-10-29）
-- `collect_results.py` 的 before／after 對照表只留兩列：「有答案的題目答對」12/12 對 12/12、「陷阱題被拿去作答」4/6 對 0/6
-- 拿掉「C+D 轉人工」那一列。原因有二：baseline 本來就沒有轉人工功能，這一列沒什麼可比；D 題的判斷又太主觀。D 題的結果照樣列在逐題明細裡（正式版 3/3 轉人工）
-- D3 討論時提到的設計（先查訂單存不存在，再決定是照實際狀態回覆還是轉客服）需要接上訂單系統。這個 demo 沒有接，提案只能寫成「可以加」
+## Comparison table decision (by the user, 2026-10-29)
+- The before/after table in `collect_results.py` keeps only two rows: "answerable questions correct" 12/12 vs. 12/12, and "trap questions answered" 4/6 vs. 0/6
+- The "C+D handed off" row was dropped for two reasons: the baseline has no handoff feature, so there's nothing to compare, and the D questions are too subjective. D results are still in the per-question details (grounded version 3/3 handed off)
+- The design that came up while discussing D3 (look up whether the order exists first, then either answer from its actual status or hand off to support) needs an order system connection. This demo doesn't have one, so a proposal can only say it "can be added"
 
-## 待決定
-- 無
+## Open decisions
+- None

@@ -1,173 +1,173 @@
-# 實作規格：只照自家文件回答的客服助理（RAG，Python＋LangChain）
+# Implementation spec: a support assistant that answers only from the company's own docs (RAG, Python + LangChain)
 
-> 方向與理由見 `../../00-作品集方向_繁中.md`；本檔是**可直接執行的規格**。遇到本檔沒寫到、或跟實際 API 不符的地方：在 `docs/VERIFICATION.md` 的「待決定」記下來，選最小的改動保住原意，不擴大範圍。
-> 程式碼、註解、README、commit message 用英文；`docs/VERIFICATION.md` 用繁體中文。
+> The reasoning behind this project lives in internal planning notes that are not part of this repo. This file is the **spec to build from**. If something isn't covered here, or the real API behaves differently, log it under "Open decisions" in `docs/VERIFICATION.md`, then make the smallest change that keeps the original intent. Don't widen the scope.
+> Code, comments, README, commit messages, and every file under `docs/` are in English.
 
 ---
 
-## 0. 前置條件（使用者完成，見 `../../01-帳號準備步驟_繁中.md`）
-- `demo/.env` 已填：`OPENAI_API_KEY`、`SLACK_WEBHOOK_URL`。
-- 使用者已同意在 `demo/.venv` 安裝 §1.1 的套件。
-- 缺值時只做離線部分（`LLM_MODE=mock`、單元測試），並在 VERIFICATION.md 記下哪些沒測。
+## 0. Prerequisites (done by the user)
+- `demo/.env` has `OPENAI_API_KEY` and `SLACK_WEBHOOK_URL` filled in.
+- The user has agreed to install the §1.1 packages into `demo/.venv`.
+- If any value is missing, only build the offline parts (`LLM_MODE=mock`, unit tests) and note in VERIFICATION.md what went untested.
 
-## 1. 硬性規則
-1. **套件**：只裝 `requirements.txt` 列的套件，裝在 `demo/.venv`，版本鎖定（`==`）。不裝全域套件。
-   - `langchain-core`、`langchain-text-splitters`、`langchain-community`（`PyMuPDFLoader`）、`langchain-openai`、`langchain-chroma`、`chromadb`、`pymupdf`、`openai`、`python-dotenv`、`fastapi`、`uvicorn`、`httpx`、`pytest`
-2. **機密**：不印、不寫進 log，也不寫進任何會進 git 的檔案。錯誤訊息裡的 key、webhook URL 一律換成 `***`。
-3. **不 git push**、不建 GitHub repo，由使用者決定。本機 commit 可以。
-4. **OpenAI 用量**：開發一律 `LLM_MODE=mock`（`DeterministicFakeEmbedding`＋假的 chat 回覆）。真的呼叫只在 §8.3 E2E，評測整批最多跑 2 輪；每次 live 執行前在對話裡說一聲。
-5. **虛構資料**：品牌、產品、政策全部虛構，每份文件頁首或檔頭標 `Fictional demo content`。不使用真實品牌名稱或真實業主文件。
-6. **數字由程式算**：結果表、題數、通過率一律由 `collect_results.py` 從 run log 統計，不讓 LLM 產生任何統計數字。
+## 1. Hard rules
+1. **Packages:** install only what `requirements.txt` lists, into `demo/.venv`, with pinned versions (`==`). No global installs.
+   - `langchain-core`, `langchain-text-splitters`, `langchain-community` (`PyMuPDFLoader`), `langchain-openai`, `langchain-chroma`, `chromadb`, `pymupdf`, `openai`, `python-dotenv`, `fastapi`, `uvicorn`, `httpx`, `pytest`
+2. **Secrets** are never printed, logged, or written to any file that goes into git. Keys and webhook URLs in error messages are replaced with `***`.
+3. **No `git push`** and no GitHub repo creation; the user decides. Local commits are fine.
+4. **OpenAI usage:** development always runs with `LLM_MODE=mock` (`DeterministicFakeEmbedding` + fake chat replies). Real calls happen only in the §8.3 E2E run, with at most 2 full eval rounds. Mention it in the conversation before every live run.
+5. **Fictional data:** the brand, products, and policies are all made up, and every document's header is marked `Fictional demo content`. No real brand names or real client documents.
+6. **Numbers come from code:** result tables, question counts, and pass rates are all computed by `collect_results.py` from the run log. The LLM never produces any statistic.
 
-## 2. 檔案結構（最終）
+## 2. File layout (final)
 ```
 demo/
   README.md  requirements.txt  .env.example  .gitignore
   docs/  SPEC.md  SETUP.md  OPERATIONS.md  VERIFICATION.md
-  knowledge/            # 虛構品牌文件（live 索引來源）
-  knowledge_updates/    # returns-policy v2（E 題用，替換 knowledge/ 裡的 v1）
+  knowledge/            # fictional brand documents (source for the live index)
+  knowledge_updates/    # returns-policy v2 (for the E question; replaces v1 in knowledge/)
   scripts/
-    make_docs.py        # 用 PyMuPDF 產生 PDF（含表格）＋寫 Markdown
-    ingest.py           # CLI：增量建索引；--rebuild 清空重建
-    ask.py              # CLI：問一題；--mode grounded|baseline
-    run_eval.py         # 跑 eval/questions.json；--mode grounded|baseline|both；--only A1,C3
-    collect_results.py  # run log → output/results.md（對照表）
-    swap_returns_policy.py  # E 題：v1↔v2 切換
+    make_docs.py        # generates the PDFs with PyMuPDF (including tables) + writes the Markdown
+    ingest.py           # CLI: incremental indexing; --rebuild wipes and rebuilds
+    ask.py              # CLI: ask one question; --mode grounded|baseline
+    run_eval.py         # runs eval/questions.json; --mode grounded|baseline|both; --only A1,C3
+    collect_results.py  # run log → output/results.md (comparison table)
+    swap_returns_policy.py  # E question: switch v1↔v2
   app/
-    config.py           # 讀 .env、預設值、遮罩機密
-    ingest.py           # 載入、切段、chunk id、manifest（sha256）增量
-    retrieve.py         # Chroma 檢索＋relevance 分數
-    citations.py        # 引用驗證（純函式）
-    answer.py           # grounded chain：門檻 → structured output → 引用驗證 → 決策
+    config.py           # reads .env, defaults, masks secrets
+    ingest.py           # load, split, chunk ids, incremental manifest (sha256)
+    retrieve.py         # Chroma retrieval + relevance scores
+    citations.py        # citation checks (pure functions)
+    answer.py           # grounded chain: threshold → structured output → citation check → decision
     baseline.py         # naive chain
-    handoff.py          # Slack 通知（或 SLACK_MODE=log 寫 jsonl）
+    handoff.py          # Slack notification (or SLACK_MODE=log writes jsonl)
     server.py           # FastAPI
     static/  index.html  compare.html  widget.css  widget.js
   eval/  questions.json  calibration.json
   tests/ test_citations.py  test_decision.py  test_ingest_manifest.py  test_schema.py  test_server.py
-  output/  run-log/  results.md  handoff-log.jsonl   # 不進 git（保留 .gitkeep）
+  output/  run-log/  results.md  handoff-log.jsonl   # not in git (keeps .gitkeep)
 ```
 
-## 3. 虛構品牌與文件
-品牌：**Cinderpeak Outdoor (demo)**，賣露營爐、營燈、保冷箱、睡袋、行動電源，只出貨美國與加拿大。
+## 3. Fictional brand and documents
+Brand: **Cinderpeak Outdoor (demo)**, which sells camp stoves, lanterns, coolers, sleeping bags, and power banks, and ships only to the US and Canada.
 
-| 檔案 | 格式 | 內容重點（測試題會用到） |
+| File | Format | Key content (used by test questions) |
 |---|---|---|
-| returns-policy.pdf（v1） | PDF 2 頁 | 30 天退貨、未使用、退款 5–7 個工作天、燃料罐不可退 |
-| knowledge_updates/returns-policy.pdf（v2） | PDF 2 頁 | 改成 **14 天**，其餘不變；頁首寫 v2 生效日 |
-| warranty.pdf | PDF 3 頁，**含表格** | 各產品線保固年限（爐 3 年、營燈 2 年、保冷箱 5 年、睡袋 1 年、行動電源 1 年）、不保範圍、申請步驟 |
-| shipping-rates.pdf | PDF 2 頁，**含表格** | 美國／加拿大運費級距、免運門檻（US$75）、出貨時間 |
-| manual-ember-2-stove.pdf 等產品手冊 ×5 | PDF 各 2–4 頁 | 規格、使用、清潔、常見故障排除 |
-| faq.md | MD | 帳號、付款方式、訂單追蹤 |
-| order-changes.md | MD | 下單後 1 小時內可改、取消流程 |
-| gift-cards-and-promos.md | MD | 禮物卡不過期、折扣碼不可疊加 |
-| care-and-storage.md | MD | 保養與收納 |
-| international-shipping.md | MD | 只寄美加，其他國家不寄 |
-| spare-parts.md | MD | 可買的零件清單（不含價格） |
+| returns-policy.pdf (v1) | PDF, 2 pages | 30-day returns, unused items only, refunds in 5–7 business days, fuel canisters can't be returned |
+| knowledge_updates/returns-policy.pdf (v2) | PDF, 2 pages | Changed to **14 days**, everything else the same; the header shows v2's effective date |
+| warranty.pdf | PDF, 3 pages, **with tables** | Warranty length per product line (stoves 3 years, lanterns 2 years, coolers 5 years, sleeping bags 1 year, power banks 1 year), exclusions, how to file a claim |
+| shipping-rates.pdf | PDF, 2 pages, **with tables** | US/Canada shipping tiers, free shipping threshold (US$75), processing times |
+| manual-ember-2-stove.pdf and other product manuals ×5 | PDF, 2–4 pages each | Specs, use, cleaning, common troubleshooting |
+| faq.md | MD | Accounts, payment methods, order tracking |
+| order-changes.md | MD | Orders can be changed within 1 hour, cancellation process |
+| gift-cards-and-promos.md | MD | Gift cards don't expire, promo codes can't be combined |
+| care-and-storage.md | MD | Care and storage |
+| international-shipping.md | MD | US and Canada only; no other countries |
+| spare-parts.md | MD | List of available spare parts (no prices) |
 
-共 16 份。**陷阱題的答案絕不能出現在任何文件裡**；`make_docs.py` 寫完後跑一次 grep 確認 C 類關鍵詞（例如 price match、rental、military、store location）不在文件中，結果記進 VERIFICATION.md。
+16 in total. **The answer to a trap question must never appear in any document.** After `make_docs.py` writes them, run a grep to confirm the C-category keywords (e.g. price match, rental, military, store location) don't appear, and record the result in VERIFICATION.md.
 
-## 4. Ingest（`app/ingest.py`）
-- PDF：`PyMuPDFLoader`，每頁一個 Document，metadata 保留 `source`（相對檔名）與 `page`（1 起算）。MD：讀全文，`page=None`，以標題切節（`MarkdownHeaderTextSplitter`），metadata 加 `section`。
-- 切段：`RecursiveCharacterTextSplitter(chunk_size=900, chunk_overlap=120)`。
-- **chunk id**：`{source}#p{page}#c{idx}`（MD 用 `#s{section_slug}#c{idx}`），決定性，重跑相同。
-- **manifest**：`output/index-manifest.json` 記 `{source: sha256}`。新增或改動的檔案先刪掉該 source 的舊 chunk 再加；manifest 有、磁碟沒有的 → 刪除。未改動的不碰。CLI 印出 `added / updated / removed / unchanged` 數量。
-- Embedding：`OpenAIEmbeddings(model=EMBED_MODEL)`，預設 `text-embedding-3-small`；mock 模式用 `DeterministicFakeEmbedding(size=256)`，Chroma 目錄依模式分開（`output/chroma-live`、`output/chroma-mock`）。
+## 4. Ingest (`app/ingest.py`)
+- PDF: `PyMuPDFLoader`, one Document per page, with metadata keeping `source` (relative filename) and `page` (1-based). MD: read the whole file with `page=None`, split by heading (`MarkdownHeaderTextSplitter`), and add `section` to the metadata.
+- Chunking: `RecursiveCharacterTextSplitter(chunk_size=900, chunk_overlap=120)`.
+- **chunk id:** `{source}#p{page}#c{idx}` (MD uses `#s{section_slug}#c{idx}`). Deterministic, identical across reruns.
+- **manifest:** `output/index-manifest.json` stores `{source: sha256}`. For new or changed files, delete that source's old chunks first, then add. Anything in the manifest but not on disk is deleted. Unchanged files aren't touched. The CLI prints the `added / updated / removed / unchanged` counts.
+- Embedding: `OpenAIEmbeddings(model=EMBED_MODEL)`, default `text-embedding-3-small`. Mock mode uses `DeterministicFakeEmbedding(size=256)`, and each mode has its own Chroma directory (`output/chroma-live`, `output/chroma-mock`).
 
-## 5. 回答流程
-### 5.1 檢索（`app/retrieve.py`）
-`similarity_search_with_relevance_scores(question, k=TOP_K)`，`TOP_K` 預設 5。回傳 `[{chunk_id, source, page, text, score}]`。
+## 5. Answer flow
+### 5.1 Retrieval (`app/retrieve.py`)
+`similarity_search_with_relevance_scores(question, k=TOP_K)`, with `TOP_K` defaulting to 5. Returns `[{chunk_id, source, page, text, score}]`.
 
-### 5.2 Grounded（`app/answer.py`）
-1. 最高分 `< RELEVANCE_MIN` → **不呼叫 LLM**，`status=handoff`、`reason=low_relevance`。
-2. 呼叫 chat model（`CHAT_MODEL`，`temperature=0`），`with_structured_output` 取得：
+### 5.2 Grounded (`app/answer.py`)
+1. Top score `< RELEVANCE_MIN` → **don't call the LLM**; `status=handoff`, `reason=low_relevance`.
+2. Call the chat model (`CHAT_MODEL`, `temperature=0`) and use `with_structured_output` to get:
    ```json
    {"answerable": true, "answer": "...", "citations": [{"chunk_id": "...", "quote": "..."}]}
    ```
-   Prompt 規則（`app/prompts/grounded.md`）：只能用提供的段落；段落沒有明確答案就 `answerable=false`；每個事實都要有 citation；quote 必須是段落原文的連續片段，最長 200 字元。
-3. **引用驗證**（`app/citations.py`，純函式）：
-   - `chunk_id` 必須在這次檢索結果裡；
-   - `quote` 正規化（小寫、合併空白、統一引號與破折號）後必須是該段落正規化文字的子字串；
-   - 長度 ≥ 12 字元（防止只引 "the" 這種）。
-4. 決策（純函式 `decide()`）：
-   | 條件 | status | reason |
+   Prompt rules (`app/prompts/grounded.md`): use only the provided passages; if they don't clearly contain the answer, return `answerable=false`; every fact needs a citation; a quote must be a continuous span of the passage text, at most 200 characters.
+3. **Citation check** (`app/citations.py`, pure functions):
+   - `chunk_id` must be in this request's retrieval results;
+   - after normalizing (lowercase, collapse whitespace, unify quotes and dashes), `quote` must be a substring of that passage's normalized text;
+   - length ≥ 12 characters (so a quote can't be just "the").
+4. Decision (pure function `decide()`):
+   | Condition | status | reason |
    |---|---|---|
    | `answerable=false` | handoff | model_declined |
-   | `answerable=true`，但 0 個有效引用 | handoff | no_valid_citation |
-   | `answerable=true`，部分引用無效 | answered | —（只顯示有效引用，log 記下無效的） |
-   | `answerable=true`，全部有效 | answered | — |
-5. `status=handoff` 時回固定訊息：「I couldn't find this in our help documents, so I've passed your question to our support team.」並呼叫 `handoff.notify()`。
-6. **錯誤**：OpenAI 例外（`APIError`、`APIConnectionError`、`RateLimitError`、`NotFoundError`、timeout 20 秒）重試 1 次；仍失敗 → `status=degraded`、`reason=llm_error`，回固定訊息「Our assistant is having trouble right now. Your question has been sent to our support team.」＋告警。**API 回 200，不丟 500**。
+   | `answerable=true` but 0 valid citations | handoff | no_valid_citation |
+   | `answerable=true`, some citations invalid | answered | n/a (show only valid citations; log the invalid ones) |
+   | `answerable=true`, all valid | answered | n/a |
+5. When `status=handoff`, return the fixed message "I couldn't find this in our help documents, so I've passed your question to our support team." and call `handoff.notify()`.
+6. **Errors:** OpenAI exceptions (`APIError`, `APIConnectionError`, `RateLimitError`, `NotFoundError`, a 20-second timeout) retry once. If it still fails → `status=degraded`, `reason=llm_error`, return the fixed message "Our assistant is having trouble right now. Your question has been sent to our support team." plus an alert. **The API returns 200, never 500.**
 
-### 5.3 Baseline（`app/baseline.py`）
-同一份索引、同樣 `TOP_K`；prompt 只有「You are a helpful support assistant for Cinderpeak Outdoor. Use the context below to answer the customer's question.」＋段落＋問題；純文字輸出；無門檻、無 structured output、無引用驗證、無 handoff。README 與作品集都要寫明這是**自己寫的簡化版**，用來對照。
+### 5.3 Baseline (`app/baseline.py`)
+Same index and same `TOP_K`. The prompt is only "You are a helpful support assistant for Cinderpeak Outdoor. Use the context below to answer the customer's question." + passages + question. Plain text output, with no threshold, no structured output, no citation check, and no handoff. The README and portfolio both have to say this is **a simplified version I wrote myself**, used for comparison.
 
-### 5.4 轉人工（`app/handoff.py`）
-- Slack Incoming Webhook，訊息含：問題、reason、前 3 個檢索段落（`source p.N`＋前 160 字元）、時間、`request_id`。
-- `SLACK_MODE=log`（mock 預設）時只寫 `output/handoff-log.jsonl`。
-- Slack 失敗不能讓 `/ask` 失敗：記 log，回應照常。
+### 5.4 Handoff (`app/handoff.py`)
+- Slack Incoming Webhook. The message includes the question, reason, top 3 retrieved passages (`source p.N` + first 160 characters), time, and `request_id`.
+- With `SLACK_MODE=log` (the mock default), it only writes `output/handoff-log.jsonl`.
+- A Slack failure can't make `/ask` fail: log it and respond as usual.
 
-## 6. API 與網頁（`app/server.py`）
-| Method | Path | 說明 |
+## 6. API and web pages (`app/server.py`)
+| Method | Path | Description |
 |---|---|---|
-| POST | `/ask` | `{question, mode: "grounded"\|"baseline"}` → `{request_id, status, answer, citations:[{chunk_id, source, page, quote}], reason}`；question 空白或 > 1000 字元回 422 |
-| POST | `/handoff` | `{question, note?}`，使用者按「Talk to a person」→ Slack，`reason=user_requested` |
-| GET | `/source/{chunk_id}` | 回該段原文與 metadata，供「展開出處」 |
-| GET | `/health` | 索引 chunk 數、模式（不含機密） |
-| GET | `/` | `index.html`：客服 widget 風格（右下角泡泡展開），答案下列出處、可展開原文、Talk to a person 按鈕、頁尾標 demo／虛構 |
-| GET | `/compare` | `compare.html`：同一題左右並排（baseline vs grounded），錄影用 |
+| POST | `/ask` | `{question, mode: "grounded"\|"baseline"}` → `{request_id, status, answer, citations:[{chunk_id, source, page, quote}], reason}`; a blank question or one over 1000 characters returns 422 |
+| POST | `/handoff` | `{question, note?}`; the user clicks "Talk to a person" → Slack, `reason=user_requested` |
+| GET | `/source/{chunk_id}` | Returns that passage's text and metadata, for "show source" |
+| GET | `/health` | Index chunk count and mode (no secrets) |
+| GET | `/` | `index.html`: a support widget (a bubble in the bottom right that opens up), sources listed under the answer with expandable text, a Talk to a person button, and a demo/fictional label in the footer |
+| GET | `/compare` | `compare.html`: the same question side by side (baseline vs. grounded), for recording |
 
-前端只用原生 HTML/CSS/JS，不用 CDN。
+The front end uses only plain HTML/CSS/JS, with no CDN.
 
-## 7. 評測
-### 7.1 題目（`eval/questions.json`）
+## 7. Evaluation
+### 7.1 Questions (`eval/questions.json`)
 ```json
 {"id": "A1", "category": "A", "question": "...",
  "expect": {"status": "answered", "facts": ["30 days"], "sources": [{"source": "returns-policy.pdf", "page": 1}]},
  "note": "..."}
 ```
-| 類別 | 題數 | 判定（程式） |
+| Category | Count | How it's scored (by code) |
 |---|---|---|
-| A 文件有答案 | 8 | status=answered、`facts` 全部以不分大小寫 regex 命中、至少 1 個有效引用指向 `sources` 之一（page 為 null 時只比 source） |
-| B 表格／精確數字 | 4 | 同上，facts 用精確數字 regex（例如 `\$75`、`\b5[- ]year`） |
-| C 陷阱題 | 6 | grounded：status=handoff；baseline：見 7.2 |
-| D 模糊需真人 | 3 | status=handoff（例如「我的爐子壞了可以換新的嗎」沒給購買日期與故障描述 → 算轉人工即可；若 answered 但引用有效，記為「answered（可接受）」另列，不算失敗也不算通過，寫進 VERIFICATION） |
-| E 文件更新 | 1 | 先在 v1 問（預期 30 天）→ `swap_returns_policy.py v2` → `ingest.py` → 再問（預期 14 天、引用 v2 頁面）；ingest 輸出必須是 `updated 1`、其餘 unchanged |
-| F 模型錯誤 | 1 | 以 `CHAT_MODEL=gpt-does-not-exist` 跑一題 → status=degraded、handoff-log 或 Slack 有一筆 `llm_error`；接著用正常模型問下一題成功 |
+| A: answer is in the docs | 8 | status=answered, every `facts` entry matches as a case-insensitive regex, and at least 1 valid citation points to one of the `sources` (when page is null, only the source is compared) |
+| B: tables / exact numbers | 4 | Same as above, with exact-number regexes for facts (e.g. `\$75`, `\b5[- ]year`) |
+| C: trap questions | 6 | grounded: status=handoff; baseline: see 7.2 |
+| D: ambiguous, needs a person | 3 | status=handoff (e.g. "my stove broke, can I get a new one?" with no purchase date or description of the problem → a handoff is enough. If it's answered with valid citations, record it separately as "answered (acceptable)", counted as neither a pass nor a failure, and note it in VERIFICATION) |
+| E: document update | 1 | Ask on v1 first (expect 30 days) → `swap_returns_policy.py v2` → `ingest.py` → ask again (expect 14 days, citing the v2 page). Ingest output must be `updated 1` with everything else unchanged |
+| F: model error | 1 | Run one question with `CHAT_MODEL=gpt-does-not-exist` → status=degraded, and the handoff log or Slack has one `llm_error` entry; the next question with the normal model then succeeds |
 
-### 7.2 Baseline 在 C 類的判定
-Baseline 是自由文字，先用規則判斷：命中拒答 regex（`don't have|do not have|no information|not (mentioned|specified|covered|included)|couldn't find|can't find|unable to (find|confirm)|contact (our )?support`）→ 記「拒答」，否則記「作答（亂編）」。**另外由使用者逐題人工確認一次**，人工標記寫進 `eval/baseline-labels.json`；結果表以人工標記為準，並列出規則與人工不一致的題號。
+### 7.2 Scoring the baseline on category C
+The baseline is free text, so a rule judges it first: if it matches the decline regex (`don't have|do not have|no information|not (mentioned|specified|covered|included)|couldn't find|can't find|unable to (find|confirm)|contact (our )?support`), it's recorded as "declined"; otherwise "answered (made up)". **The user also checks each question by hand once.** The manual labels go in `eval/baseline-labels.json`; the result table uses the manual labels and lists the question IDs where the rule and the manual label disagree.
 
-### 7.3 門檻校正
-`RELEVANCE_MIN` 只用 `eval/calibration.json`（6 題，3 題有答案、3 題陷阱，**不與 questions.json 重複**）校正一次，結果與選定值寫進 VERIFICATION.md。之後跑正式評測不再調。
+### 7.3 Threshold calibration
+`RELEVANCE_MIN` is calibrated once, using only `eval/calibration.json` (6 questions: 3 with answers, 3 traps, **none overlapping questions.json**). The results and the chosen value go in VERIFICATION.md. It isn't tuned again during the real eval.
 
-### 7.4 輸出
-- `run_eval.py` 每題寫一行到 `output/run-log/<timestamp>-<mode>.jsonl`：問題、status、reason、answer、citations（含是否有效）、檢索分數、耗時、模型名稱。
-- `collect_results.py` 產生 `output/results.md`：
-  - 對照表：baseline vs grounded 的「答對且出處正確（A+B）」「陷阱題作答（C）」「正確轉人工（C+D）」
-  - 逐題明細
-  - 頁首註明：題目與文件都是虛構、題數、模型名稱、執行日期
+### 7.4 Output
+- `run_eval.py` writes one line per question to `output/run-log/<timestamp>-<mode>.jsonl`: question, status, reason, answer, citations (with whether each is valid), retrieval scores, duration, and model name.
+- `collect_results.py` produces `output/results.md`:
+  - A comparison table, baseline vs. grounded: "correct with the right source (A+B)", "trap questions answered (C)", "correct handoffs (C+D)"
+  - Per-question details
+  - A header noting that the questions and documents are fictional, plus the question count, model name, and run date
 
-## 8. 測試
-### 8.1 單元測試（`pytest`，mock，不連網）
-- `test_citations.py`：子字串、正規化（大小寫、空白、彎引號）、chunk_id 不在檢索結果、太短的 quote
-- `test_decision.py`：§5.2 決策表每一列；低於門檻時 chat model 不被呼叫（用假物件計數）
-- `test_ingest_manifest.py`：新增、改動、刪除、未改動四種情況的計數與 chunk 刪加
-- `test_schema.py`：structured output 缺欄位、型別錯 → 視為 no_valid_citation，不丟例外
-- `test_server.py`：`/ask` 422、degraded 回 200、`/handoff` 在 Slack 失敗時仍 200、`/source` 404
+## 8. Tests
+### 8.1 Unit tests (`pytest`, mocked, no network)
+- `test_citations.py`: substring, normalization (case, whitespace, curly quotes), chunk_id not in the retrieval results, quotes that are too short
+- `test_decision.py`: every row of the §5.2 decision table; below the threshold the chat model isn't called (counted with a fake object)
+- `test_ingest_manifest.py`: counts and chunk deletes/adds for new, changed, deleted, and unchanged files
+- `test_schema.py`: structured output with missing fields or wrong types → treated as no_valid_citation, no exception
+- `test_server.py`: `/ask` 422, degraded returns 200, `/handoff` still returns 200 when Slack fails, `/source` 404
 
 ### 8.2 Mock E2E
-`LLM_MODE=mock`：`ingest.py --rebuild` → `run_eval.py --mode both` 能跑完、檔案格式正確（不看分數）。
+With `LLM_MODE=mock`: `ingest.py --rebuild` → `run_eval.py --mode both` runs to the end with correctly formatted files (scores aren't checked).
 
-### 8.3 Live E2E（使用者同意後）
-1. `ingest.py --rebuild`（live embedding）
-2. 校正 `RELEVANCE_MIN`（§7.3）
+### 8.3 Live E2E (after the user agrees)
+1. `ingest.py --rebuild` (live embeddings)
+2. Calibrate `RELEVANCE_MIN` (§7.3)
 3. `run_eval.py --mode both` → `collect_results.py`
-4. E、F 題
-5. 瀏覽器實際操作 `/` 與 `/compare`：展開出處、Talk to a person → Slack 收到
+4. The E and F questions
+5. Use `/` and `/compare` in a real browser: expand a source, click Talk to a person → Slack receives it
 
-## 9. 文件
-- `README.md`（英文）：這是什麼、架構圖、如何跑、結果表連結、限制（虛構資料、baseline 是自寫簡化版、沒做的功能）
-- `docs/SETUP.md`：venv、`.env`、ingest、啟動伺服器
-- `docs/OPERATIONS.md`：加文件／換文件 → `ingest.py`；調 `RELEVANCE_MIN`、`TOP_K`；看 handoff log；換模型
-- `docs/VERIFICATION.md`（繁中）：每一步實際跑過什麼、結果、待決定事項
+## 9. Documentation
+- `README.md` (English): what it is, an architecture diagram, how to run it, a link to the results table, and limits (fictional data, the baseline is a simplified version I wrote, features not built)
+- `docs/SETUP.md`: venv, `.env`, ingest, starting the server
+- `docs/OPERATIONS.md`: adding or replacing documents → `ingest.py`; tuning `RELEVANCE_MIN` and `TOP_K`; reading the handoff log; switching models
+- `docs/VERIFICATION.md` (English): what was actually run at each step, the results, and open decisions

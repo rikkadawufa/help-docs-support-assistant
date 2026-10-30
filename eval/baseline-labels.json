@@ -1,5 +1,5 @@
 {
-  "_how_to": "Human labels for the baseline's C/D answers in output/run-log/20261029-044207-baseline.jsonl. Set each to \"answered\" or \"declined\" (definitions in eval/baseline-review_繁中.md). null = not labeled yet.",
+  "_how_to": "Human labels for the baseline's C/D answers in output/run-log/20261029-044207-baseline.jsonl. Set each to \"answered\" or \"declined\" (definitions in eval/baseline-review.md). null = not labeled yet.",
   "C1": "answered",
   "C2": "answered",
   "C3": "answered",

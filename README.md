@@ -32,7 +32,7 @@ Re-indexing only touches changed files. Each file's SHA-256 is kept in a manifes
 
 - The simple RAG's answers to the trap and account questions were labeled by a person (`eval/baseline-labels.json`). Its four answered traps read like policies that don't exist, for example "we do not offer price matching".
 - The 3 account-specific questions (a double charge, a missing order, a dented stove) were all handed off.
-- **These numbers come from the third round on the same questions.** Round 1 answered only 4 of 12 because the relevance floor was set too high. Round 2 answered 9 of 12; the remaining misses were table rows and headings quoted with different punctuation. Each fix was a general change (prompt rules, quote check, table handling), but all three rounds used the same 21 questions. The run logs for all three rounds are in [`results/`](results/), and the full record is in `docs/VERIFICATION.md` (Traditional Chinese).
+- **These numbers come from the third round on the same questions.** Round 1 answered only 4 of 12 because the relevance floor was set too high. Round 2 answered 9 of 12; the remaining misses were table rows and headings quoted with different punctuation. Each fix was a general change (prompt rules, quote check, table handling), but all three rounds used the same 21 questions. The run logs for all three rounds are in [`results/`](results/), and the full record is in `docs/VERIFICATION.md`.
 
 Two scenario tests, also live:
 
@@ -93,7 +93,7 @@ eval/         questions.json, calibration.json, baseline-labels.json
 results/      run logs from the three live rounds and the scenario tests
 scripts/      make_docs, ingest, ask, serve, run_eval, collect_results, swap_returns_policy
 tests/        pytest
-docs/         SPEC (Traditional Chinese), SETUP, OPERATIONS, VERIFICATION (Traditional Chinese)
+docs/         SPEC, SETUP, OPERATIONS, VERIFICATION
 ```
 
 ## License

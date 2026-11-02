@@ -437,11 +437,21 @@
     {
       "id": "P18",
       "category": "P",
-      "kind": "trap_stitching",
+      "kind": "answerable",
       "question": "Can I return a spare part I ordered from you by email?",
       "expect": {
-        "status": "handoff"
-      }
+        "status": "answered",
+        "facts": [
+          "\\b30\\b"
+        ],
+        "sources": [
+          {
+            "source": "returns-policy.pdf",
+            "page": 1
+          }
+        ]
+      },
+      "label_note": "Relabeled after tuning round 2: first labeled a trap, but the returns policy covers most items and doesn't exclude spare parts, so answering with the 30-day rule is correct."
     },
     {
       "id": "P21",

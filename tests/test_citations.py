@@ -20,6 +20,12 @@ def test_curly_quotes_and_ligatures_match_plain_text():
     assert check_citation("x#p1#c0", "exchanges, eﬀective today", retrieved).valid
 
 
+def test_dash_returned_as_escaped_utf8_bytes_still_matches():
+    # seen live: the model returned "5–7" with the en dash as lone surrogates \udce2\udc80\udc93
+    c = check_citation("returns-policy.pdf#p2#c0", "within 5\udce2\udc80\udc937 business days", RETRIEVED)
+    assert c.valid
+
+
 def test_quote_not_in_chunk_is_rejected():
     c = check_citation("returns-policy.pdf#p2#c0", "within 3 business days", RETRIEVED)
     assert not c.valid and c.problem == "quote_not_in_chunk"

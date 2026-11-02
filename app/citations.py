@@ -13,8 +13,16 @@ _QUOTE_MAP = str.maketrans({
 })
 
 
+def _repair_bytes(text: str) -> str:
+    """The model sometimes returns a character as its raw UTF-8 bytes escaped as lone
+    surrogates (an en dash arrives as \\udce2\\udc80\\udc93). Turn them back into the character."""
+    if not any("\udc80" <= ch <= "\udcff" for ch in text):
+        return text
+    return text.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+
+
 def normalize(text: str) -> str:
-    text = unicodedata.normalize("NFKC", text).translate(_QUOTE_MAP).lower()
+    text = unicodedata.normalize("NFKC", _repair_bytes(text)).translate(_QUOTE_MAP).lower()
     return re.sub(r"\s+", " ", text).strip()
 
 

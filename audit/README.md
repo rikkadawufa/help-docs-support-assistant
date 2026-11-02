@@ -49,6 +49,7 @@ The demo's two assistants (`app/`) can be pointed at another set of documents wi
 | `INDEX_NAME` | gives these documents their own index; always set it, or ingest replaces the demo index |
 | `BRAND_NAME` | the business name in both system prompts |
 | `HANDOFF_REPLY` | what the guarded assistant says when it hands off |
+| `DEGRADED_REPLY` | what it says when the model call fails (timeout, API error) |
 | `PAGE_BANNER`, `PAGE_FOOTER` | regex for the banner and footer repeated on each PDF page; empty strips nothing |
 
 `scripts/ingest.py --docs <folder> --index <name>` does the same for one run. Before any client question is asked, `scripts/freeze.py` records the code, every setting that changes an answer, both prompts and every document hash, and prints a fingerprint to post to the client. `audit/run.py --freeze <file>` copies it into the run folder, and the report states when the assistants were fixed. The step-by-step client procedure is in `catalog/delivery.md` (Starter).

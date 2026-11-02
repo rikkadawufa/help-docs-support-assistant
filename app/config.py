@@ -17,6 +17,9 @@ OUTPUT_DIR = ROOT / "output"
 DEFAULT_BRAND = "Cinderpeak Outdoor"
 DEFAULT_HANDOFF_REPLY = ("I couldn't find this in our help documents, so I've passed your question "
                          "to our support team. They'll reply by email within 1 business day.")
+# What the guarded assistant says when the model call fails (timeout, API error).
+DEFAULT_DEGRADED_REPLY = ("Our assistant is having trouble right now. Your question has been sent to "
+                          "our support team, and they'll reply by email within 1 business day.")
 # Boilerplate stripped from every PDF page before chunking. An empty pattern strips nothing.
 # A footer pattern may capture (?P<title>...), which is then put at the top of each chunk.
 DEFAULT_PAGE_BANNER = r"^Cinderpeak Outdoor \| Help Center \| Fictional demo content\s*$"
@@ -37,6 +40,7 @@ class Settings:
     slack_webhook_url: str = ""
     brand_name: str = DEFAULT_BRAND
     handoff_reply: str = DEFAULT_HANDOFF_REPLY
+    degraded_reply: str = DEFAULT_DEGRADED_REPLY
     knowledge_dir: Path = KNOWLEDGE_DIR
     index_name: str = ""            # "" = the demo's own index; any other name gets its own index
     page_banner: str = DEFAULT_PAGE_BANNER
@@ -71,6 +75,7 @@ def load_settings() -> Settings:
         slack_webhook_url=env.get("SLACK_WEBHOOK_URL", "").strip(),
         brand_name=env.get("BRAND_NAME", DEFAULT_BRAND).strip() or DEFAULT_BRAND,
         handoff_reply=env.get("HANDOFF_REPLY", DEFAULT_HANDOFF_REPLY).strip() or DEFAULT_HANDOFF_REPLY,
+        degraded_reply=env.get("DEGRADED_REPLY", DEFAULT_DEGRADED_REPLY).strip() or DEFAULT_DEGRADED_REPLY,
         knowledge_dir=docs_path(env.get("KNOWLEDGE_DIR", "")),
         index_name=index_name(env.get("INDEX_NAME", "")),
         page_banner=env.get("PAGE_BANNER", DEFAULT_PAGE_BANNER),

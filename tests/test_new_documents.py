@@ -16,7 +16,7 @@ FROZEN_PROMPTS = {
     "grounded": "37f34c72b053a479fb24780ffe4253997f4a20e6fecc46838d6dc9067247ee0e",
     "baseline": "755e843583844b646beca59ef87e483c9900f6c2fbf03f7fabf2cf2de1abf181",
 }
-ENV = ("BRAND_NAME", "HANDOFF_REPLY", "KNOWLEDGE_DIR", "INDEX_NAME", "PAGE_BANNER", "PAGE_FOOTER", "LLM_MODE")
+ENV = ("BRAND_NAME", "HANDOFF_REPLY", "DEGRADED_REPLY", "KNOWLEDGE_DIR", "INDEX_NAME", "PAGE_BANNER", "PAGE_FOOTER", "LLM_MODE")
 
 
 @pytest.fixture
@@ -74,6 +74,30 @@ def test_handoff_uses_the_configured_reply(monkeypatch, tmp_path):
     bot = answer_mod.GroundedAssistant(Settings(handoff_reply="Acme support will email you."), store=None)
     reply = bot.ask("Anything?")
     assert reply.status == "handoff" and reply.answer == "Acme support will email you."
+
+
+def test_model_failure_uses_the_configured_reply(monkeypatch, tmp_path):
+    import app.answer as answer_mod
+    import app.handoff as handoff_mod
+    from app.store import Retrieved
+
+    class Failing:
+        def invoke(self, *a, **k):
+            raise TimeoutError("model timed out")
+
+    monkeypatch.setattr(handoff_mod, "LOG_PATH", tmp_path / "handoff.jsonl")
+    monkeypatch.setattr(answer_mod, "retrieve",
+                        lambda *a: [Retrieved("faq.md#c0", "faq.md", 0, "", "Returns take 30 days.", 0.9)])
+    bot = answer_mod.GroundedAssistant(Settings(degraded_reply="Please email Acme support."), store=None)
+    monkeypatch.setattr(bot, "_structured", lambda: Failing())
+    reply = bot.ask("How long do returns take?")
+    assert reply.status == "degraded" and reply.answer == "Please email Acme support."
+
+
+def test_degraded_reply_comes_from_env(clean_env):
+    assert load_settings().degraded_reply == config.DEFAULT_DEGRADED_REPLY
+    clean_env.setenv("DEGRADED_REPLY", "Please email Acme support.")
+    assert load_settings().degraded_reply == "Please email Acme support."
 
 
 def _pdf(path, lines):

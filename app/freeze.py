@@ -20,7 +20,7 @@ from .llm import prompt
 
 APP = ROOT / "app"
 ANSWER_SETTINGS = ("llm_mode", "chat_model", "embed_model", "top_k", "relevance_min", "brand_name",
-                   "handoff_reply", "page_banner", "page_footer", "index_name")
+                   "handoff_reply", "degraded_reply", "page_banner", "page_footer", "index_name")
 
 
 def _digest(data) -> str:

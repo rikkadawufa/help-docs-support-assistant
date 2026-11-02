@@ -12,13 +12,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from . import handoff
 from .citations import decide
-from .config import DEFAULT_HANDOFF_REPLY, Settings, mask
+from .config import DEFAULT_DEGRADED_REPLY, DEFAULT_HANDOFF_REPLY, Settings, mask
 from .llm import GROUNDED_SCHEMA, MockGrounded, chat_model, format_passages, prompt
 from .store import Retrieved, retrieve
 
 HANDOFF_REPLY = DEFAULT_HANDOFF_REPLY   # the demo's reply; Settings.handoff_reply is the one used
-DEGRADED_REPLY = ("Our assistant is having trouble right now. Your question has been sent to "
-                  "our support team, and they'll reply by email within 1 business day.")
+DEGRADED_REPLY = DEFAULT_DEGRADED_REPLY  # the demo's reply; Settings.degraded_reply is the one used
 
 LLM_ERRORS = (openai.OpenAIError, httpx.HTTPError, TimeoutError)
 
@@ -77,7 +76,7 @@ class GroundedAssistant:
             llm = self._structured()
             parsed = llm.invoke(messages, passages=passages) if isinstance(llm, MockGrounded) else llm.invoke(messages)
         except LLM_ERRORS as exc:
-            reply.status, reply.answer, reply.reason = "degraded", DEGRADED_REPLY, "llm_error"
+            reply.status, reply.answer, reply.reason = "degraded", self.settings.degraded_reply, "llm_error"
             reply.rejected_citations = [{"error": mask(f"{type(exc).__name__}: {exc}")[:300]}]
             handoff.notify(self.settings, question, "llm_error", passages, rid)
             reply.ms = int((time.perf_counter() - t0) * 1000)

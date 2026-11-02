@@ -1,50 +1,465 @@
 {
-  "note": "Made-up questions about the made-up Cinderpeak Outdoor documents. facts are case-insensitive regexes that must all match the answer. sources: at least one valid citation must point at one of them (page 0 = Markdown, matched by file only).",
+  "note": "Made-up questions about the made-up Cinderpeak Outdoor documents. facts are case-insensitive regexes that must all match the answer. sources: at least one valid citation must point at one of them (page 0 = Markdown, matched by file only). kind: answerable | trap_not_covered | trap_false_premise | trap_stitching | trap_outdated | account. A-D were used to tune rounds 1-3; P-questions were added on 2026-11-02 for further tuning; 11 of the 22 drafted were dropped because the held-out set's author found they asked the same thing as a held-out question. Neither is the held-out set (see audit/HOLDOUT.md).",
   "questions": [
-    {"id": "A1", "category": "A", "question": "How many days do I have to return something?",
-     "expect": {"status": "answered", "facts": ["\\b30\\b"], "sources": [{"source": "returns-policy.pdf", "page": 1}]}},
-    {"id": "A2", "category": "A", "question": "Once you get my return, how long until I see the refund?",
-     "expect": {"status": "answered", "facts": ["5\\s*(-|–|to)\\s*7"], "sources": [{"source": "returns-policy.pdf", "page": 2}]}},
-    {"id": "A3", "category": "A", "question": "I bought an extra propane canister and never used it. Can I send it back?",
-     "expect": {"status": "answered", "facts": ["\\b(no|not|cannot|can't|can not)\\b"], "sources": [{"source": "returns-policy.pdf", "page": 1}]}},
-    {"id": "A4", "category": "A", "question": "It's going to rain on our trip. Is it OK to cook with the Ember 2 inside the tent?",
-     "expect": {"status": "answered", "facts": ["\\b(no|never|not)\\b"], "sources": [{"source": "manual-ember-2-stove.pdf", "page": 2}]}},
-    {"id": "A5", "category": "A", "question": "How should I wash my Drift 20 sleeping bag?",
-     "expect": {"status": "answered", "facts": ["cold", "front"], "sources": [{"source": "manual-drift-20-sleeping-bag.pdf", "page": 2}]}},
-    {"id": "A6", "category": "A", "question": "My lantern stopped turning on after two months. How do I make a warranty claim?",
-     "expect": {"status": "answered", "facts": ["warranty@cinderpeak\\.example"], "sources": [{"source": "warranty.pdf", "page": 3}]}},
-    {"id": "A7", "category": "A", "question": "Can I use two promo codes on the same order?",
-     "expect": {"status": "answered", "facts": ["\\b(no|one|cannot|can't|not)\\b"], "sources": [{"source": "gift-cards-and-promos.md", "page": 0}]}},
-    {"id": "A8", "category": "A", "question": "Do you ship to the UK?",
-     "expect": {"status": "answered", "facts": ["\\b(no|not|only|don't)\\b"], "sources": [{"source": "international-shipping.md", "page": 0}]}},
-
-    {"id": "B1", "category": "B", "question": "What's the warranty on the Glacier 45 cooler?",
-     "expect": {"status": "answered", "facts": ["\\b(5|five)[- ]years?\\b"], "sources": [{"source": "warranty.pdf", "page": 2}]}},
-    {"id": "B2", "category": "B", "question": "How much is standard shipping on a $50 order in the US?",
-     "expect": {"status": "answered", "facts": ["\\$9\\.95"], "sources": [{"source": "shipping-rates.pdf", "page": 1}]}},
-    {"id": "B3", "category": "B", "question": "How long does the Halo lantern last on the low setting?",
-     "expect": {"status": "answered", "facts": ["\\b40 hours\\b"], "sources": [{"source": "manual-halo-lantern.pdf", "page": 1}]}},
-    {"id": "B4", "category": "B", "question": "How long is the battery inside my Halo lantern covered under warranty?",
-     "expect": {"status": "answered", "facts": ["\\b(1|one)[- ]year\\b"], "sources": [{"source": "warranty.pdf", "page": 2}]}},
-
-    {"id": "C1", "category": "C", "question": "Do you price match if I find the Ember 2 cheaper somewhere else?",
-     "expect": {"status": "handoff"}},
-    {"id": "C2", "category": "C", "question": "Can I rent a Glacier 45 cooler for a weekend trip?",
-     "expect": {"status": "handoff"}},
-    {"id": "C3", "category": "C", "question": "Do you have a military discount?",
-     "expect": {"status": "handoff"}},
-    {"id": "C4", "category": "C", "question": "Where is your nearest store? I want to see the Halo lantern in person.",
-     "expect": {"status": "handoff"}},
-    {"id": "C5", "category": "C", "question": "Can I charge the Halo lantern with a solar panel?",
-     "expect": {"status": "handoff"}},
-    {"id": "C6", "category": "C", "question": "When will the Drift 20 sleeping bag be back in stock?",
-     "expect": {"status": "handoff"}},
-
-    {"id": "D1", "category": "D", "question": "My stove arrived with a dent but I've already used it twice. Can I get a new one?",
-     "expect": {"status": "handoff"}},
-    {"id": "D2", "category": "D", "question": "I was charged twice for my last order. Can you fix it?",
-     "expect": {"status": "handoff"}},
-    {"id": "D3", "category": "D", "question": "Where is my order #48213? It's been 9 days.",
-     "expect": {"status": "handoff"}}
+    {
+      "id": "A1",
+      "category": "A",
+      "question": "How many days do I have to return something?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b30\\b"
+        ],
+        "sources": [
+          {
+            "source": "returns-policy.pdf",
+            "page": 1
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "A2",
+      "category": "A",
+      "question": "Once you get my return, how long until I see the refund?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "5\\s*(-|–|to)\\s*7"
+        ],
+        "sources": [
+          {
+            "source": "returns-policy.pdf",
+            "page": 2
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "A3",
+      "category": "A",
+      "question": "I bought an extra propane canister and never used it. Can I send it back?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b(no|not|cannot|can't|can not)\\b"
+        ],
+        "sources": [
+          {
+            "source": "returns-policy.pdf",
+            "page": 1
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "A4",
+      "category": "A",
+      "question": "It's going to rain on our trip. Is it OK to cook with the Ember 2 inside the tent?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b(no|never|not)\\b"
+        ],
+        "sources": [
+          {
+            "source": "manual-ember-2-stove.pdf",
+            "page": 2
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "A5",
+      "category": "A",
+      "question": "How should I wash my Drift 20 sleeping bag?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "cold",
+          "front"
+        ],
+        "sources": [
+          {
+            "source": "manual-drift-20-sleeping-bag.pdf",
+            "page": 2
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "A6",
+      "category": "A",
+      "question": "My lantern stopped turning on after two months. How do I make a warranty claim?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "warranty@cinderpeak\\.example"
+        ],
+        "sources": [
+          {
+            "source": "warranty.pdf",
+            "page": 3
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "A7",
+      "category": "A",
+      "question": "Can I use two promo codes on the same order?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b(no|one|cannot|can't|not)\\b"
+        ],
+        "sources": [
+          {
+            "source": "gift-cards-and-promos.md",
+            "page": 0
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "A8",
+      "category": "A",
+      "question": "Do you ship to the UK?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b(no|not|only|don't)\\b"
+        ],
+        "sources": [
+          {
+            "source": "international-shipping.md",
+            "page": 0
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "B1",
+      "category": "B",
+      "question": "What's the warranty on the Glacier 45 cooler?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b(5|five)[- ]years?\\b"
+        ],
+        "sources": [
+          {
+            "source": "warranty.pdf",
+            "page": 2
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "B2",
+      "category": "B",
+      "question": "How much is standard shipping on a $50 order in the US?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\$9\\.95"
+        ],
+        "sources": [
+          {
+            "source": "shipping-rates.pdf",
+            "page": 1
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "B3",
+      "category": "B",
+      "question": "How long does the Halo lantern last on the low setting?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b40 hours\\b"
+        ],
+        "sources": [
+          {
+            "source": "manual-halo-lantern.pdf",
+            "page": 1
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "B4",
+      "category": "B",
+      "question": "How long is the battery inside my Halo lantern covered under warranty?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b(1|one)[- ]year\\b"
+        ],
+        "sources": [
+          {
+            "source": "warranty.pdf",
+            "page": 2
+          }
+        ]
+      },
+      "kind": "answerable"
+    },
+    {
+      "id": "C1",
+      "category": "C",
+      "question": "Do you price match if I find the Ember 2 cheaper somewhere else?",
+      "expect": {
+        "status": "handoff"
+      },
+      "kind": "trap_not_covered"
+    },
+    {
+      "id": "C2",
+      "category": "C",
+      "question": "Can I rent a Glacier 45 cooler for a weekend trip?",
+      "expect": {
+        "status": "handoff"
+      },
+      "kind": "trap_not_covered"
+    },
+    {
+      "id": "C3",
+      "category": "C",
+      "question": "Do you have a military discount?",
+      "expect": {
+        "status": "handoff"
+      },
+      "kind": "trap_not_covered"
+    },
+    {
+      "id": "C4",
+      "category": "C",
+      "question": "Where is your nearest store? I want to see the Halo lantern in person.",
+      "expect": {
+        "status": "handoff"
+      },
+      "kind": "trap_not_covered"
+    },
+    {
+      "id": "C5",
+      "category": "C",
+      "question": "Can I charge the Halo lantern with a solar panel?",
+      "expect": {
+        "status": "handoff"
+      },
+      "kind": "trap_not_covered"
+    },
+    {
+      "id": "C6",
+      "category": "C",
+      "question": "When will the Drift 20 sleeping bag be back in stock?",
+      "expect": {
+        "status": "handoff"
+      },
+      "kind": "trap_not_covered"
+    },
+    {
+      "id": "D1",
+      "category": "D",
+      "question": "My stove arrived with a dent but I've already used it twice. Can I get a new one?",
+      "expect": {
+        "status": "handoff"
+      },
+      "kind": "account"
+    },
+    {
+      "id": "D2",
+      "category": "D",
+      "question": "I was charged twice for my last order. Can you fix it?",
+      "expect": {
+        "status": "handoff"
+      },
+      "kind": "account"
+    },
+    {
+      "id": "D3",
+      "category": "D",
+      "question": "Where is my order #48213? It's been 9 days.",
+      "expect": {
+        "status": "handoff"
+      },
+      "kind": "account"
+    },
+    {
+      "id": "P03",
+      "category": "P",
+      "kind": "answerable",
+      "question": "What would standard shipping cost me on a $30 order to Ohio?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\$6\\.95"
+        ],
+        "sources": [
+          {
+            "source": "shipping-rates.pdf",
+            "page": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "P06",
+      "category": "P",
+      "kind": "answerable",
+      "question": "How many days will the Glacier 45 keep ice?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b(5|five) days\\b"
+        ],
+        "sources": [
+          {
+            "source": "manual-glacier-45-cooler.pdf",
+            "page": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "P09",
+      "category": "P",
+      "kind": "answerable",
+      "question": "How many Trailpoints do I need to get $5 off?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b100\\b"
+        ],
+        "sources": [
+          {
+            "source": "trailpoints-rewards.md",
+            "page": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "P12",
+      "category": "P",
+      "kind": "answerable",
+      "question": "My Ember 2 flame is really weak on cold mornings. Any tips?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "warm"
+        ],
+        "sources": [
+          {
+            "source": "manual-ember-2-stove.pdf",
+            "page": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "P13",
+      "category": "P",
+      "kind": "answerable",
+      "question": "If I return something just because I changed my mind, do I pay for return shipping?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\$7\\.95"
+        ],
+        "sources": [
+          {
+            "source": "returns-policy.pdf",
+            "page": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "P14",
+      "category": "P",
+      "kind": "answerable",
+      "question": "How long does standard delivery take to Canada?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\b5\\s*(-|–|to)\\s*10\\b"
+        ],
+        "sources": [
+          {
+            "source": "shipping-rates.pdf",
+            "page": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "P15",
+      "category": "P",
+      "kind": "trap_false_premise",
+      "question": "Since returns ship free, how do I get the free label for a jacket I didn't like?",
+      "expect": {
+        "status": "answered",
+        "facts": [
+          "\\$7\\.95"
+        ],
+        "sources": [
+          {
+            "source": "returns-policy.pdf",
+            "page": 2
+          }
+        ]
+      }
+    },
+    {
+      "id": "P17",
+      "category": "P",
+      "kind": "trap_stitching",
+      "question": "Can I use my Trailpoints to buy a gift card?",
+      "expect": {
+        "status": "handoff"
+      }
+    },
+    {
+      "id": "P18",
+      "category": "P",
+      "kind": "trap_stitching",
+      "question": "Can I return a spare part I ordered from you by email?",
+      "expect": {
+        "status": "handoff"
+      }
+    },
+    {
+      "id": "P21",
+      "category": "P",
+      "kind": "account",
+      "question": "Can you check whether the refund for order 55102 went through?",
+      "expect": {
+        "status": "handoff"
+      }
+    },
+    {
+      "id": "P22",
+      "category": "P",
+      "kind": "account",
+      "question": "How many Trailpoints do I have right now?",
+      "expect": {
+        "status": "handoff"
+      }
+    }
   ]
 }

@@ -39,6 +39,20 @@ Two scenario tests, also live:
 - **Document update**: the returns window changed from 30 to 14 days. Re-indexing reported `updated 1, unchanged 15`, and the answer changed from 30 to 14 days.
 - **AI failure**: with a model name that doesn't exist, the API returned a fallback reply, Slack got an alert, and the next question was answered normally.
 
+## Held-out test
+
+The 21 questions above were also used for tuning. For numbers that weren't tuned on, another AI model (OpenAI Codex) wrote 65 new questions from the documents alone, and their file hash was committed before tuning started. The settings were then frozen (git tag `audit-freeze-1`) and the set was run once: each question 3 times, on gpt-4o-mini, on Nov 2, 2026. Grading is done in code by `audit/grade.py`.
+
+| What was checked | Simple RAG | This assistant |
+|---|---|---|
+| Answerable questions answered correctly | 133/150 runs (89%) | 127/150 runs (85%) |
+| Questions it should hand off: answered anyway | 39/45 runs (87%) | 9/45 runs (20%) |
+| Correct answers citing the right file and page | no sources returned | 127/127 |
+
+It did worse than the simple RAG on two kinds of question: ones built on a wrong assumption (0/15 runs against 9/15) and ones about an old version of a policy (9/15 against 13/15). It handed those off instead of giving the current rule. The 127 includes one ruling made after the run, on question H18. [`audit/HOLDOUT.md`](audit/HOLDOUT.md) has the ruling and the full record.
+
+The test tool is in [`audit/`](audit/). It runs a question set against any RAG system with an HTTP API through promptfoo, grades every reply in code, and builds the report from the graded results. See [`audit/README.md`](audit/README.md).
+
 ## Run it
 
 ```bash
@@ -57,7 +71,7 @@ See [docs/SETUP.md](docs/SETUP.md) for setup and [docs/OPERATIONS.md](docs/OPERA
 ## Tests
 
 ```bash
-.venv/Scripts/python -m pytest -q                              # 34 unit tests, no network
+.venv/Scripts/python -m pytest -q                              # unit tests, no network
 LLM_MODE=live .venv/Scripts/python scripts/run_eval.py --mode both
 .venv/Scripts/python scripts/collect_results.py                # writes output/results.md
 ```
@@ -90,8 +104,9 @@ app/          ingest, store, answer chain, quote check, handoff, FastAPI, static
 app/prompts/  grounded.md (the rules the model follows), baseline.md
 knowledge/    the 16 made-up help documents that get indexed
 eval/         questions.json, calibration.json, baseline-labels.json
+audit/        test tool: run.py, grade.py, report.py, notes.py, findings.yaml, plans.yaml, HOLDOUT.md
 results/      run logs from the three live rounds and the scenario tests
-scripts/      make_docs, ingest, ask, serve, run_eval, collect_results, swap_returns_policy
+scripts/      make_docs, ingest, freeze, ask, serve, run_eval, collect_results, swap_returns_policy
 tests/        pytest
 docs/         SPEC, SETUP, OPERATIONS, VERIFICATION
 ```

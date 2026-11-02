@@ -9,7 +9,9 @@ Each run gets its own folder under output/audit/: the generated promptfoo config
 promptfoo's raw results.json, and the report (dataset.json, report.md, per-question.csv).
 Grading is audit/grade.py (code only, no LLM). The report is audit/report.py.
 --freeze copies a record from scripts/freeze.py into the run folder as freeze.json, so the report
-can state when and at which version the test assistants were fixed.
+can state when and at which version the test assistants were fixed. The setup is recorded again
+first, from the same .env the server reads; if any code, setting, prompt or document differs from the
+freeze, the run stops before a question is asked.
 """
 from __future__ import annotations
 
@@ -30,7 +32,8 @@ sys.path.insert(0, str(AUDIT))
 import report  # noqa: E402
 
 sys.path.insert(0, str(ROOT))
-from app.freeze import verify  # noqa: E402
+from app.config import docs_path, load_settings  # noqa: E402
+from app.freeze import drift, record, verify  # noqa: E402
 
 
 def rel(path: Path, start: Path) -> str:
@@ -84,6 +87,16 @@ def main() -> None:
         rec = json.loads(args.freeze.read_text("utf-8"))
         if not verify(rec):
             sys.exit(f"{args.freeze} does not match its own fingerprint; make a new one with scripts/freeze.py")
+        settings = load_settings()
+        if rec.get("documents_dir"):
+            settings = settings.with_overrides(knowledge_dir=docs_path(rec["documents_dir"]))
+        try:
+            changes = drift(rec, record(settings))
+        except ValueError as e:
+            sys.exit(f"Not run: {e}")
+        if changes:
+            sys.exit("Not run: the test setup changed after it was frozen.\n  - " + "\n  - ".join(changes)
+                     + "\nPut it back, or freeze again and post the new fingerprint before running.")
 
     only = {s.strip() for s in args.only.split(",") if s.strip()}
     bank = load_bank(args.bank.resolve(), only)

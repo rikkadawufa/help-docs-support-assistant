@@ -154,6 +154,22 @@ def test_freeze_record_covers_settings_prompts_and_documents(tmp_path, monkeypat
     assert not verify(edited)
 
 
+def test_drift_lists_what_changed_after_the_freeze(tmp_path, monkeypatch):
+    from app.freeze import drift, record
+    from app.ingest import sync
+    settings, docs = _frozen_settings(tmp_path, monkeypatch)
+    rec = record(settings)
+    assert drift(rec, record(settings)) == []
+    assert drift(rec, record(settings.with_overrides(top_k=9))) == ["setting top_k: frozen 5, now 9"]
+    assert drift(rec, record(settings.with_overrides(brand_name="Other Co"))) == [
+        "setting brand_name: frozen 'Cinderpeak Outdoor', now 'Other Co'",
+        "prompt baseline changed", "prompt grounded changed"]
+    (docs / "a.md").write_text("# A\n\n## Hours\nOpen 9 to 6.\n", "utf-8")
+    sync(settings)
+    assert drift(rec, record(settings)) == ["document a.md changed"]
+    assert record(settings)["documents_dir"] == str(docs.resolve())
+
+
 def test_freeze_refuses_an_index_that_does_not_match_the_documents(tmp_path, monkeypatch):
     from app.freeze import record
     settings, docs = _frozen_settings(tmp_path, monkeypatch)

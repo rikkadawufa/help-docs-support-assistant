@@ -8,12 +8,15 @@ Usage:
 Each run gets its own folder under output/audit/: the generated promptfoo config,
 promptfoo's raw results.json, and the report (dataset.json, report.md, per-question.csv).
 Grading is audit/grade.py (code only, no LLM). The report is audit/report.py.
+--freeze copies a record from scripts/freeze.py into the run folder as freeze.json, so the report
+can state when and at which version the test assistants were fixed.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -25,6 +28,9 @@ PROMPTFOO = "promptfoo@0.124.1"
 
 sys.path.insert(0, str(AUDIT))
 import report  # noqa: E402
+
+sys.path.insert(0, str(ROOT))
+from app.freeze import verify  # noqa: E402
 
 
 def rel(path: Path, start: Path) -> str:
@@ -72,12 +78,19 @@ def main() -> None:
     ap.add_argument("--only", default="", help="comma-separated question ids")
     ap.add_argument("--concurrency", type=int, default=2)
     ap.add_argument("--url", default="", help="override every target's url (e.g. another port)")
+    ap.add_argument("--freeze", type=Path, help="record from scripts/freeze.py, copied into the run folder")
     args = ap.parse_args()
+    if args.freeze:
+        rec = json.loads(args.freeze.read_text("utf-8"))
+        if not verify(rec):
+            sys.exit(f"{args.freeze} does not match its own fingerprint; make a new one with scripts/freeze.py")
 
     only = {s.strip() for s in args.only.split(",") if s.strip()}
     bank = load_bank(args.bank.resolve(), only)
     out = ROOT / "output" / "audit" / datetime.now().strftime("%Y%m%d-%H%M%S")
     out.mkdir(parents=True, exist_ok=True)
+    if args.freeze:
+        shutil.copyfile(args.freeze, out / "freeze.json")
     config = build_config(bank, [t.resolve() for t in args.target], out, args.url)
     # JSON is valid YAML, so promptfoo reads this file as its config.
     (out / "promptfooconfig.yaml").write_text(json.dumps(config, indent=2, ensure_ascii=False), "utf-8")

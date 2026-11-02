@@ -12,12 +12,11 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from . import handoff
 from .citations import decide
-from .config import Settings, mask
+from .config import DEFAULT_HANDOFF_REPLY, Settings, mask
 from .llm import GROUNDED_SCHEMA, MockGrounded, chat_model, format_passages, prompt
 from .store import Retrieved, retrieve
 
-HANDOFF_REPLY = ("I couldn't find this in our help documents, so I've passed your question "
-                 "to our support team. They'll reply by email within 1 business day.")
+HANDOFF_REPLY = DEFAULT_HANDOFF_REPLY   # the demo's reply; Settings.handoff_reply is the one used
 DEGRADED_REPLY = ("Our assistant is having trouble right now. Your question has been sent to "
                   "our support team, and they'll reply by email within 1 business day.")
 
@@ -71,7 +70,7 @@ class GroundedAssistant:
             return self._handoff(reply, question, passages, "low_relevance", t0)
 
         messages = [
-            SystemMessage(prompt("grounded")),
+            SystemMessage(prompt("grounded", self.settings.brand_name)),
             HumanMessage(f"Passages:\n\n{format_passages(passages)}\n\nCustomer question: {question}"),
         ]
         try:
@@ -99,7 +98,7 @@ class GroundedAssistant:
         return reply
 
     def _handoff(self, reply: Reply, question: str, passages, reason: str, t0: float) -> Reply:
-        reply.status, reply.answer, reply.reason = "handoff", HANDOFF_REPLY, reason
+        reply.status, reply.answer, reply.reason = "handoff", self.settings.handoff_reply, reason
         handoff.notify(self.settings, question, reason, passages, reply.request_id)
         reply.ms = int((time.perf_counter() - t0) * 1000)
         return reply

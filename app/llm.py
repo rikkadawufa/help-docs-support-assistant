@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .config import Settings
+from .config import DEFAULT_BRAND, Settings
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 
@@ -34,8 +34,10 @@ GROUNDED_SCHEMA = {
 }
 
 
-def prompt(name: str) -> str:
-    return (PROMPTS / f"{name}.md").read_text(encoding="utf-8")
+def prompt(name: str, brand: str = DEFAULT_BRAND) -> str:
+    """The system prompt with the business name filled in. Plain replacement, not str.format(),
+    so braces elsewhere in a prompt are left alone."""
+    return (PROMPTS / f"{name}.md").read_text(encoding="utf-8").replace("{brand}", brand)
 
 
 def format_passages(passages) -> str:

@@ -1,5 +1,5 @@
 """Load the help documents, split them into chunks and keep the Chroma index
-in sync with the knowledge/ folder. Only new or changed files are re-embedded."""
+in sync with the documents folder (knowledge/ unless KNOWLEDGE_DIR says otherwise). Only new or changed files are re-embedded."""
 from __future__ import annotations
 
 import hashlib
@@ -13,15 +13,16 @@ import pymupdf
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
-from .config import KNOWLEDGE_DIR, Settings
+from .config import DEFAULT_PAGE_BANNER, DEFAULT_PAGE_FOOTER, Settings
 from .store import open_store
 
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 80
 
-# Every PDF page carries the same banner and a "<title> | page N of M" footer.
-BANNER = re.compile(r"^Cinderpeak Outdoor \| Help Center \| Fictional demo content\s*$", re.MULTILINE)
-FOOTER = re.compile(r"^(?P<title>.+?) \| page \d+ of \d+\s*$", re.MULTILINE)
+# Every demo PDF page carries the same banner and a "<title> | page N of M" footer. Other
+# documents set their own patterns (PAGE_BANNER, PAGE_FOOTER) or an empty one to strip nothing.
+BANNER = re.compile(DEFAULT_PAGE_BANNER, re.MULTILINE)
+FOOTER = re.compile(DEFAULT_PAGE_FOOTER, re.MULTILINE)
 SUPPORTED = {".pdf", ".md"}
 
 _splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
@@ -50,7 +51,14 @@ def page_text(page: pymupdf.Page) -> str:
     return "".join(text for _, text in sorted(items, key=lambda x: x[0]))
 
 
-def load_chunks(path: Path, source: str) -> list[Document]:
+def boilerplate(settings: Settings) -> tuple[re.Pattern | None, re.Pattern | None]:
+    """The page banner and footer patterns from the settings; None where a pattern is empty."""
+    return tuple(re.compile(p, re.MULTILINE) if p.strip() else None
+                 for p in (settings.page_banner, settings.page_footer))
+
+
+def load_chunks(path: Path, source: str, banner: re.Pattern | None = BANNER,
+                footer: re.Pattern | None = FOOTER) -> list[Document]:
     """Split one file into chunks with deterministic ids in metadata['chunk_id']."""
     chunks: list[Document] = []
     if path.suffix == ".pdf":
@@ -59,10 +67,14 @@ def load_chunks(path: Path, source: str) -> list[Document]:
         for page, raw in enumerate(pages, start=1):
             # NFKC turns PDF ligatures (U+FB00 -> ff) back into plain letters
             content = unicodedata.normalize("NFKC", raw)
-            title = m.group("title") if (m := FOOTER.search(content)) else path.stem
+            m = footer.search(content) if footer else None
+            title = (m.groupdict().get("title") if m else None) or path.stem
             # Drop the boilerplate (it only adds noise to the embedding) and put
             # the document title at the top of each chunk instead.
-            content = FOOTER.sub("", BANNER.sub("", content)).strip()
+            for pattern in (banner, footer):
+                if pattern:
+                    content = pattern.sub("", content)
+            content = content.strip()
             for i, text in enumerate(_splitter.split_text(content)):
                 if not text.startswith(title):
                     text = f"{title}\n{text}"
@@ -112,7 +124,9 @@ def plan_sync(on_disk: dict[str, str], manifest: dict[str, str]) -> SyncReport:
     return report
 
 
-def sync(settings: Settings, folder: Path = KNOWLEDGE_DIR, rebuild: bool = False) -> SyncReport:
+def sync(settings: Settings, folder: Path | None = None, rebuild: bool = False) -> SyncReport:
+    folder = Path(folder or settings.knowledge_dir)
+    banner, footer = boilerplate(settings)
     store = open_store(settings, reset=rebuild)
     manifest_path = settings.manifest_path
     manifest = {} if rebuild or not manifest_path.exists() else json.loads(manifest_path.read_text("utf-8"))
@@ -126,7 +140,7 @@ def sync(settings: Settings, folder: Path = KNOWLEDGE_DIR, rebuild: bool = False
         if old:
             store.delete(ids=old)
     for name in report.added + report.updated:
-        chunks = load_chunks(files[name], name)
+        chunks = load_chunks(files[name], name, banner, footer)
         store.add_documents(chunks, ids=[c.metadata["chunk_id"] for c in chunks])
         report.chunks_written += len(chunks)
 

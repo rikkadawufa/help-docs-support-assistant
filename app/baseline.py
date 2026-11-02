@@ -26,7 +26,7 @@ class BaselineAssistant:
         t0 = time.perf_counter()
         passages = retrieve(self.store, question, self.settings.top_k)
         context = "\n\n".join(p.text for p in passages)
-        messages = [SystemMessage(prompt("baseline")),
+        messages = [SystemMessage(prompt("baseline", self.settings.brand_name)),
                     HumanMessage(f"Context:\n{context}\n\nQuestion: {question}")]
         if self.settings.llm_mode != "live":
             text = MockBaseline().invoke(messages, passages=passages)

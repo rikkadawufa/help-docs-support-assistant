@@ -1,0 +1,55 @@
+# Report layout per plan. catalog/src/build_report.py --plan <name> reads one entry; audit/notes.py
+# checks the audit's notes against the same entry, so a plan's required fields live here, not in code.
+#
+#   pages:       page kinds in order (summary, results, findings, fix_plan, method, appendix)
+#   required:    hand-written fields that must be filled in audit-notes.yaml
+#   not_used:    fields this layout never prints; filling them is an error, so nothing is silently dropped
+#   effort:      true = every failure type needs an effort entry (hours), shown in the fix plan
+#   case_for_every_failure: true = every failure type that occurs needs at least one worked example
+#   fix_line:    true = each finding ends with the generic fix from findings.yaml
+#   freeze:      true = the run folder must hold freeze.json from scripts/freeze.py (taken in live mode)
+#   verdicts:    when set, verdict_choice must be one of these keys; label is what the report prints
+#   thresholds:  numbers behind the suggested verdict (see notes.suggested_verdict). null = not decided
+#                yet, and a report for this plan is not built until every threshold is set.
+
+standard:
+  label: Standard
+  pages: [summary, results, findings, fix_plan, appendix]
+  required: [headline_summary, headline_results, intro, verdict, summary_note, results_intro, method, cases,
+             effort, limits, retest, footer, disclosure]
+  not_used: [verdict_choice, verdict_reason]
+  effort: true
+  case_for_every_failure: false
+  fix_line: true
+  freeze: false
+
+starter:
+  label: Starter
+  pages: [summary, findings, method, appendix]
+  required: [headline_summary, intro, verdict_choice, verdict, summary_note, method, cases, limits, footer,
+             disclosure]
+  not_used: [headline_results, results_intro, effort, retest, extra]
+  effort: false
+  case_for_every_failure: true
+  fix_line: false
+  freeze: true
+  verdicts:
+    go:
+      label: "Go"
+      meaning: The documents support a help-docs assistant as they are.
+    fix_docs_first:
+      label: "Fix the documents first"
+      meaning: Workable after the documents are fixed; the findings show where.
+    no_go:
+      label: "No-go"
+      meaning: The documents can't support a help-docs assistant without major changes.
+  # 待董事長定: percentages, measured on the audited (guarded) assistant over all runs.
+  #   go when plain_pct >= go_plain_pct_min and made_up_pct <= go_made_up_pct_max
+  #   no_go when plain_pct < no_go_plain_pct_below or made_up_pct > no_go_made_up_pct_above
+  #   fix_docs_first otherwise
+  # A verdict that differs from the suggested one needs verdict_reason in the notes.
+  thresholds:
+    go_plain_pct_min: null
+    go_made_up_pct_max: null
+    no_go_plain_pct_below: null
+    no_go_made_up_pct_above: null

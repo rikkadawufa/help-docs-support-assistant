@@ -9,13 +9,17 @@ when it exists; the graded result is kept next to the ruled one.
 
 Reads only what audit/grade.py put in each result (pass, "fail:<type>" reason, named scores),
 so the report never re-grades and never calls an LLM.
+
+Each failed run on a question the documents answer also gets a cause from grade.py's retrieval_hit
+score (did any retrieved passage come from an expected file and page): search missed the page, search
+found it but the answer step failed, or unknown when the API does not return what it retrieved.
 """
 from __future__ import annotations
 
 import argparse
 import csv
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import yaml
@@ -25,6 +29,7 @@ import grade
 AUDIT = Path(__file__).resolve().parent
 FINDINGS = AUDIT / "findings.yaml"
 FALLBACK_TEXT = {"ruled_fail": "Changed to a fail by a ruling after the run"}
+CAUSES = ("retrieval_missed", "retrieved_answer_wrong", "retrieval_unknown")
 
 
 def _pct(n: int, d: int) -> str:
@@ -58,6 +63,29 @@ def classify(question_kind: str, base: str) -> str:
     return base
 
 
+def retrieved_state(scores: dict) -> str:
+    """hit / miss from grade.py's retrieval_hit score, n/a when it was not scored."""
+    hit = scores.get("retrieval_hit")
+    return "n/a" if hit is None else ("hit" if hit else "miss")
+
+
+def failure_cause(status: str, passed: bool, retrieved: str) -> str:
+    """Search or answer step, for a failed run on a question the documents answer; "" otherwise."""
+    if passed or status != "answered":
+        return ""
+    return {"hit": "retrieved_answer_wrong", "miss": "retrieval_missed"}.get(retrieved, "retrieval_unknown")
+
+
+def question_cause(runs: list[dict]) -> str:
+    """The cause in most of a question's failed runs; "mixed" on a tie, "" when no run has one."""
+    counts = Counter(r["cause"] for r in runs if r.get("cause")).most_common()
+    if not counts:
+        return ""
+    if len(counts) > 1 and counts[0][1] == counts[1][1]:
+        return "mixed"
+    return counts[0][0]
+
+
 def load_rulings(run_dir: Path) -> list[dict]:
     notes = Path(run_dir) / "audit-notes.yaml"
     if not notes.exists():
@@ -85,10 +113,13 @@ def build_dataset(results: dict, bank: list[dict], rulings: list[dict]) -> dict:
         ruling = ruled.get((label, qid))
         final = graded_pass if ruling is None else ruling["to"] == "pass"
         finding = "" if final else (graded_finding or "ruled_fail")
+        scores = g.get("namedScores") or row.get("namedScores") or {}
+        retrieved = retrieved_state(scores)
         runs[label][qid].append({
             "pass": final, "graded_pass": graded_pass, "ruled": ruling is not None,
             "base_kind": base, "graded_finding": graded_finding, "finding": finding, "reason": reason,
-            "scores": g.get("namedScores") or row.get("namedScores") or {},
+            "scores": scores, "retrieved_hit": retrieved,
+            "cause": failure_cause(by_id[qid]["expect"]["status"], final, retrieved),
             "answer": " ".join((out.get("answer") or "").split()),
             "cites": out.get("citations") is not None,
             "citations": [_label(c) for c in out.get("citations") or []],
@@ -104,6 +135,7 @@ def build_dataset(results: dict, bank: list[dict], rulings: list[dict]) -> dict:
         by_kind = {}
         failures = {}
         flaky = []
+        causes = {c: {"runs": 0, "questions": []} for c in CAUSES + ("mixed",)}
         for q in bank:
             qruns = runs[label].get(q["id"], [])
             k = by_kind.setdefault(q["kind"], {"questions": 0, "runs": 0, "passed": 0, "failing": []})
@@ -114,6 +146,13 @@ def build_dataset(results: dict, bank: list[dict], rulings: list[dict]) -> dict:
                 k["failing"].append(q["id"])
             if len({r["pass"] for r in qruns}) > 1:
                 flaky.append(q["id"])
+            for r in qruns:
+                if r["cause"]:
+                    causes[r["cause"]]["runs"] += 1
+                if r["pass"] and r["retrieved_hit"] == "miss" and q["expect"]["status"] == "answered":
+                    s["pass_without_hit"] += 1
+            if qc := question_cause(qruns):
+                causes[qc]["questions"].append(q["id"])
             for r in qruns:
                 sc = r["scores"]
                 if q["expect"]["status"] == "answered":
@@ -141,9 +180,11 @@ def build_dataset(results: dict, bank: list[dict], rulings: list[dict]) -> dict:
                         f["base_kinds"].append(r["base_kind"])
         repeats = {len(v) for v in runs[label].values()}
         summary[label] = {**{k: s[k] for k in ("ans_runs", "ans_pass", "cite_runs", "cite_ok", "no_runs",
-                                               "made_up", "ret_runs", "ret_hit", "fail_runs")},
+                                               "made_up", "ret_runs", "ret_hit", "fail_runs",
+                                               "pass_without_hit")},
                           "repeat": max(repeats) if repeats else 0, "flaky": flaky,
-                          "by_kind": by_kind, "failures": failures}
+                          "by_kind": by_kind, "failures": failures,
+                          "causes": {c: v for c, v in causes.items() if v["runs"] or v["questions"]}}
 
     meta = results.get("metadata", {})
     return {
@@ -169,6 +210,7 @@ def write_dataset(results_path: Path, bank_list: list[dict], out: Path, bank_pat
 
 
 def failure_titles() -> dict[str, str]:
+    """Titles of failure types and of causes (entries with type: cause), by id."""
     entries = yaml.safe_load(FINDINGS.read_text("utf-8")) if FINDINGS.exists() else []
     return {**FALLBACK_TEXT, **{e["id"]: e["title"] for e in entries or []}}
 
@@ -213,6 +255,28 @@ def write_markdown(out: Path) -> None:
         for fid, f in sorted(failures.items(), key=lambda kv: -kv[1]["runs"]):
             lines.append(f"| {titles.get(fid, fid)} | {f['runs']} | {', '.join(sorted(f['questions']))} |")
 
+    lines += ["", "## Search or answer step", "",
+              "Failed runs on questions the documents answer, by whether search returned a passage from the "
+              "expected file and page (any of the passages the API returned). A question is listed under the cause "
+              "of most of its failed runs.", "",
+              "| Cause | " + " | ".join(labels) + " |", "|---|" + "---|" * len(labels)]
+    for cause in CAUSES + ("mixed",):
+        if not any(cause in sums[l].get("causes", {}) for l in labels):
+            continue
+        cells = []
+        for l in labels:
+            c = sums[l].get("causes", {}).get(cause)
+            if not c:
+                cells.append("-")
+                continue
+            qs_ = ", ".join(c["questions"])
+            cells.append((f"{c['runs']} runs" if cause != "mixed" else "") + (f" ({qs_})" if qs_ else ""))
+        lines.append(f"| {titles.get(cause, cause)} | " + " | ".join(cells) + " |")
+    lucky = [f"{l}: {sums[l]['pass_without_hit']}" for l in labels if sums[l].get("pass_without_hit")]
+    if lucky:
+        lines += ["", "Runs that passed although search missed the expected page (the expected sources may be "
+                  "incomplete): " + "; ".join(lucky)]
+
     if data["rulings"]:
         lines += ["", "## Rulings after the run", "", "| ID | System | Changed to | Reason | Decided by |",
                   "|---|---|---|---|---|"]
@@ -239,14 +303,16 @@ def write_csv(out: Path) -> None:
     with (Path(out) / "per-question.csv").open("w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         w.writerow(["system", "id", "category", "question", "expected", "run", "pass", "failure_type",
-                    "reason", "answer", "citations", "latency_ms", "finding", "ruled", "final_pass"])
+                    "reason", "answer", "citations", "latency_ms", "finding", "ruled", "final_pass",
+                    "retrieved", "cause"])
         for label in data["systems"]:
             for qid, runs in data["runs"][label].items():
                 q = qs[qid]
                 for i, r in enumerate(runs, 1):
                     w.writerow([label, qid, q["category"], q["question"], q["status"], i, r["graded_pass"],
                                 r["base_kind"], r["reason"], r["answer"], "; ".join(r["citations"]), r["ms"],
-                                r["finding"], r["ruled"], r["pass"]])
+                                r["finding"], r["ruled"], r["pass"], r.get("retrieved_hit", "n/a"),
+                                r.get("cause", "")])
 
 
 def write(results_path: Path, bank_list: list[dict], out: Path, bank_path: Path,

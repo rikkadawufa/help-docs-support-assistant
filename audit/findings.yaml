@@ -110,3 +110,31 @@
   default_risk: medium
   fix_template: Find the error in the API logs for these questions and fix the cause
   retest: Every question gets a readable reply
+
+# Causes (type: cause): not failure types but a second label on every failed run of a question the
+# documents answer, from report.py's split of grade.py's retrieval_hit score. Reports use them to say
+# whether search or the answer step went wrong. "mixed" is only used for a whole question.
+
+- id: retrieval_missed
+  type: cause
+  title: Search missed the right page
+  plain: None of the passages search returned came from the file and page that hold the answer, so the answer step had nothing right to work from.
+  next_step: Fix search before the answer step, for example how the documents are split, how tables are stored, or adding keyword search.
+
+- id: retrieved_answer_wrong
+  type: cause
+  title: Search found the right page, but the answer step failed
+  plain: A passage from the right file and page was among the ones search returned, but the answer left out or changed a fact, or refused.
+  next_step: Fix the answer step, for example the prompt, the refusal rules, or how the answer is checked against the passage.
+
+- id: retrieval_unknown
+  type: cause
+  title: The API did not show what search returned
+  plain: The system does not return its retrieved passages, so this test cannot tell whether search or the answer step failed.
+  next_step: Expose the retrieved passages in the API response, or read them from the system's logs, and re-run.
+
+- id: mixed
+  type: cause
+  title: Search missed in some runs, and the answer step failed in others
+  plain: The same question failed for different reasons from run to run.
+  next_step: Look at search first, since a missed page also makes the answer step fail.

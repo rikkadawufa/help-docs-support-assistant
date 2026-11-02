@@ -10,6 +10,9 @@ or {ids:stitched_rule}, so the text always matches the run it is built from. The
 quote from the audited documents, written [[file p.N: exact text]] (no page for text files, | between
 table cells): its numbers are allowed because check() finds the text, word for word, in that file and
 page. check() lists every problem; a report must not be built while it returns any.
+
+Which fields a report needs depends on its plan (plans.yaml): Starter has no fix plan or hours and
+picks its verdict from a fixed list; Standard has both. Without a plan, check() uses Standard.
 """
 from __future__ import annotations
 
@@ -22,11 +25,22 @@ from pathlib import Path
 
 import yaml
 
+AUDIT = Path(__file__).resolve().parent
+PLANS = AUDIT / "plans.yaml"
 RISKS = ("high", "medium", "low")
 TEXT_FIELDS = ("headline_summary", "headline_results", "intro", "verdict", "summary_note", "results_intro",
-               "limits", "retest", "footer", "disclosure")
+               "limits", "retest", "footer", "disclosure", "verdict_reason", "kicker")
 LIST_FIELDS = ("method", "cases", "effort")
-KNOWN = set(TEXT_FIELDS) | set(LIST_FIELDS) | {"systems", "documents_dir", "risk_overrides", "rulings", "extra"}
+KNOWN = set(TEXT_FIELDS) | set(LIST_FIELDS) | {"systems", "documents_dir", "risk_overrides", "rulings", "extra",
+                                               "verdict_choice"}
+THRESHOLDS = ("go_plain_pct_min", "go_made_up_pct_max", "no_go_plain_pct_below", "no_go_made_up_pct_above")
+# Sentences a report may only state when the run bears them out: (pattern, test on Context, message).
+CLAIMS = [
+    (re.compile(r"every correct answer cited the expected file and page", re.IGNORECASE),
+     lambda ctx: ctx.sum[ctx.audited]["cite_runs"] > 0
+     and ctx.sum[ctx.audited]["cite_ok"] == ctx.sum[ctx.audited]["cite_runs"],
+     "says every correct answer cited the expected file and page, but the run has correct answers that didn't"),
+]
 QUOTE = re.compile(r"\[\[\s*([^\]:]+?)(?:\s+p\.(\d+))?\s*:\s*(.+?)\]\]")
 PLACEHOLDER = re.compile(r"\{(\w+)(?::([\w-]+))?\}")
 NUMBER = re.compile(r"(?<![\w./-])\$?\d[\d,.]*%?(?![\w-])")
@@ -47,6 +61,22 @@ def word(n: int) -> str:
 
 def load(path: Path):
     return yaml.safe_load(Path(path).read_text("utf-8"))
+
+
+def load_plan(name: str = "standard", path: Path = PLANS) -> dict:
+    plans = load(path) or {}
+    if name not in plans:
+        raise KeyError(f"no plan '{name}' in {Path(path).name} (plans: {', '.join(plans)})")
+    return {"name": name, **plans[name]}
+
+
+def failure_types(findings_list: list[dict]) -> list[dict]:
+    """findings.yaml entries that are failure types (not causes)."""
+    return [f for f in findings_list or [] if f.get("type", "failure") == "failure"]
+
+
+def causes(findings_list: list[dict]) -> dict[str, dict]:
+    return {f["id"]: f for f in findings_list or [] if f.get("type") == "cause"}
 
 
 def missing(value) -> bool:
@@ -129,8 +159,12 @@ class Context:
                                 ("account", {"account"})):
                 ok, total = self.tally(self.audited, kinds)
                 values.update({f"{name}_ok": ok, f"{name}_runs": total, f"{name}_pct": pct(ok, total)})
+                ok, total = self.qtally(self.audited, kinds)
+                values.update({f"{name}_q_ok": ok, f"{name}_q": total})
             ok, total = self.tally(self.audited, {"trap_not_covered", "trap_stitching", "account"})
             values.update({"made_up_runs": total - ok, "made_up_total": total, "made_up_pct": pct(total - ok, total)})
+            ok, total = self.qtally(self.audited, {"trap_not_covered", "trap_stitching", "account"})
+            values.update({"handoff_q_ok": ok, "handoff_q": total})
         if self.sum.get(self.baseline):
             ok, total = self.tally(self.baseline, {"trap_not_covered", "trap_stitching", "account"})
             values["base_made_up_pct"] = pct(total - ok, total)
@@ -150,6 +184,11 @@ class Context:
     def tally(self, system: str, kinds: set[str]) -> tuple[int, int]:
         bk = self.sum[system]["by_kind"]
         return (sum(bk[k]["passed"] for k in kinds if k in bk), sum(bk[k]["runs"] for k in kinds if k in bk))
+
+    def qtally(self, system: str, kinds: set[str]) -> tuple[int, int]:
+        """(questions that passed in every run, questions) over the given question types."""
+        ids = [q for q, b in self.bank.items() if b["kind"] in kinds]
+        return sum(all(r["pass"] for r in self.qruns(system, q)) for q in ids), len(ids)
 
     def qruns(self, system: str, qid: str) -> list[dict]:
         return self.runs.get(system, {}).get(qid, [])
@@ -253,8 +292,16 @@ def risk_of(fid: str, notes: dict, findings: dict) -> str:
     return findings.get(fid, {}).get("default_risk", "high")
 
 
-def groups(notes: dict, findings: dict) -> list[dict]:
-    """One work item per effort entry, highest risk first. An entry may cover several failure types."""
+def groups(notes: dict, findings: dict, present: dict | None = None) -> list[dict]:
+    """One work item per effort entry, highest risk first. An entry may cover several failure types.
+    Without effort entries (a plan with no fix plan), one item per failure type in present."""
+    if present and not as_list(notes.get("effort")):
+        out = []
+        for i, (fid, f) in enumerate(sorted(present.items(), key=lambda kv: -kv[1]["runs"])):
+            out.append({"findings": [fid], "risk": risk_of(fid, notes, findings),
+                        "title": findings.get(fid, {}).get("title", fid), "hours": [], "basis": None, "order": i,
+                        "cases": [c for c in as_list(notes.get("cases")) if (c or {}).get("finding") == fid]})
+        return sorted(out, key=lambda g: (RISKS.index(g["risk"]), g["order"]))
     out = []
     for i, e in enumerate(as_list(notes.get("effort"))):
         e = e or {}
@@ -275,11 +322,25 @@ def hours_text(hours: list) -> str:
     return f"{hours[0]} hour" + ("" if hours[0] == 1 else "s")
 
 
-def check(notes: dict, findings_list: list[dict], data: dict, notes_dir: Path) -> list[str]:
+def suggested_verdict(values: dict, thresholds: dict) -> str | None:
+    """go / no_go / fix_docs_first from the plan's thresholds; None while any threshold is unset."""
+    t = thresholds or {}
+    if any(t.get(k) is None for k in THRESHOLDS):
+        return None
+    plain, made_up = values.get("plain_pct", 0), values.get("made_up_pct", 0)
+    if plain >= t["go_plain_pct_min"] and made_up <= t["go_made_up_pct_max"]:
+        return "go"
+    if plain < t["no_go_plain_pct_below"] or made_up > t["no_go_made_up_pct_above"]:
+        return "no_go"
+    return "fix_docs_first"
+
+
+def check(notes: dict, findings_list: list[dict], data: dict, notes_dir: Path, plan: dict | None = None) -> list[str]:
     """Every reason the report must not be built. An empty list means the notes match the data."""
     errors: list[str] = []
     notes = notes or {}
-    findings = {f["id"]: f for f in findings_list}
+    plan = plan or load_plan("standard")
+    findings = {f["id"]: f for f in failure_types(findings_list)}
 
     for key in sorted(set(notes) - KNOWN):
         errors.append(f"unknown field '{key}' in the notes")
@@ -289,12 +350,16 @@ def check(notes: dict, findings_list: list[dict], data: dict, notes_dir: Path) -
             errors.append(f"systems.{role}: '{systems.get(role)}' is not a system in this run {data['systems']}")
     if errors:
         return errors
-    for key in TEXT_FIELDS:
-        if missing(notes.get(key)):
+    required = set(plan.get("required") or [])
+    for key in TEXT_FIELDS + ("verdict_choice",):
+        if key in required and missing(notes.get(key)):
             errors.append(f"{key} is empty or [TO BE ADDED]")
     for key in LIST_FIELDS:
-        if not as_list(notes.get(key)):
+        if key in required and not as_list(notes.get(key)):
             errors.append(f"{key} is empty")
+    for key in plan.get("not_used") or []:
+        if notes.get(key) not in (None, "", []):
+            errors.append(f"{key} is not used in the {plan.get('label', plan['name'])} report; remove it")
     for where, text in text_items(notes):
         if missing(text):
             if not where.startswith(TEXT_FIELDS):
@@ -304,6 +369,13 @@ def check(notes: dict, findings_list: list[dict], data: dict, notes_dir: Path) -
         if nums:
             errors.append(f"{where}: write numbers as placeholders, not {', '.join(nums)}")
     for f in findings_list:
+        if f.get("type") == "cause":
+            for field in ("title", "plain", "next_step"):
+                if missing(f.get(field)):
+                    errors.append(f"findings.yaml {f.get('id')}: {field} is empty")
+                elif numbers_in(f[field]):
+                    errors.append(f"findings.yaml {f['id']}: {field} states a number")
+            continue
         for field in ("title", "plain", "why_it_matters", "fix_template", "retest"):
             if missing(f.get(field)):
                 errors.append(f"findings.yaml {f.get('id')}: {field} is empty")
@@ -318,6 +390,21 @@ def check(notes: dict, findings_list: list[dict], data: dict, notes_dir: Path) -
         if not missing(text):
             render(text, ctx, errors, where)
             errors += [f"{where}: {e}" for e in check_quotes(text, docs)]
+            for pattern, holds, message in CLAIMS:
+                if pattern.search(str(text)) and not holds(ctx):
+                    errors.append(f"{where}: {message}")
+
+    if plan.get("verdicts"):
+        choice = notes.get("verdict_choice")
+        if not missing(choice) and choice not in plan["verdicts"]:
+            errors.append(f"verdict_choice must be one of {', '.join(plan['verdicts'])}, not '{choice}'")
+        suggested = suggested_verdict(ctx.values, plan.get("thresholds"))
+        if suggested is None:
+            unset = [k for k in THRESHOLDS if (plan.get("thresholds") or {}).get(k) is None]
+            errors.append(f"plans.yaml {plan['name']}: verdict thresholds not set yet ({', '.join(unset)})")
+        elif choice in plan["verdicts"] and choice != suggested and missing(notes.get("verdict_reason")):
+            errors.append(f"verdict_choice is '{choice}' but the thresholds suggest '{suggested}'; "
+                          f"explain why in verdict_reason")
 
     audited = systems["audited"]
     summary = data["summary"][audited]
@@ -353,6 +440,7 @@ def check(notes: dict, findings_list: list[dict], data: dict, notes_dir: Path) -
                           f"to {r['risk']} without a reason")
 
     covered: dict[str, int] = {}
+    needs_effort = plan.get("effort", True)
     for i, e in enumerate(as_list(notes.get("effort"))):
         e = e or {}
         fids = as_list(e.get("finding"))
@@ -373,9 +461,13 @@ def check(notes: dict, findings_list: list[dict], data: dict, notes_dir: Path) -
         if fid not in findings:
             errors.append(f"failure type '{fid}' occurs ({', '.join(present[fid]['questions'])}) "
                           f"but has no entry in findings.yaml")
-        if fid not in covered:
+        if needs_effort and fid not in covered:
             errors.append(f"failure type '{fid}' occurs ({', '.join(present[fid]['questions'])}) "
                           f"but has no effort entry")
+        if plan.get("case_for_every_failure") and not any(
+                (c or {}).get("finding") == fid for c in as_list(notes.get("cases"))):
+            errors.append(f"failure type '{fid}' occurs ({', '.join(present[fid]['questions'])}) "
+                          f"but has no case; this plan shows a real example of every failure type")
 
     for i, c in enumerate(as_list(notes.get("cases"))):
         c = c or {}
@@ -396,7 +488,7 @@ def check(notes: dict, findings_list: list[dict], data: dict, notes_dir: Path) -
                           ("" if (audited, qid) in ruled else " and has no ruling"))
         elif fid not in seen:
             errors.append(f"{where}: finding is '{fid}' but {qid} failed as {', '.join(sorted(seen))}")
-        if fid not in covered:
+        if needs_effort and fid not in covered:
             errors.append(f"{where}: '{fid}' has no effort entry, so the case has nowhere to go")
 
     total = sum(len(v) for v in data["runs"][audited].values())

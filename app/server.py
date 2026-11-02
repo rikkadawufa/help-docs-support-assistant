@@ -44,7 +44,7 @@ def create_app(settings: Settings | None = None, store=None) -> FastAPI:
     grounded = GroundedAssistant(settings, store)
     baseline = BaselineAssistant(settings, store)
 
-    app = FastAPI(title="Cinderpeak support assistant (demo)")
+    app = FastAPI(title=f"{settings.brand_name} support assistant (demo)")
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
     @app.get("/")

@@ -1,6 +1,8 @@
 .env
 .venv/
 output/*
+# client documents for a Starter audit: never committed
+clients/
 !output/.gitkeep
 __pycache__/
 *.py[cod]

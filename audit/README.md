@@ -25,7 +25,9 @@ LLM_MODE=mock SLACK_MODE=log .venv/Scripts/python scripts/serve.py --port 8011
   --repeat 3 --url http://127.0.0.1:8011/ask
 ```
 
-Each run writes `output/audit/<time>/`: `promptfooconfig.yaml` (generated), `results.json` (promptfoo's raw output), `report.md` and `per-question.csv`. `npx promptfoo@0.124.1 view` opens promptfoo's own viewer on the same results.
+Each run writes `output/audit/<time>/`: `promptfooconfig.yaml` (generated), `results.json` (promptfoo's raw output), `dataset.json`, `report.md` and `per-question.csv`. `npx promptfoo@0.124.1 view` opens promptfoo's own viewer on the same results.
+
+`dataset.json` holds every count (per question, system and run, per question type, and per failure type). `report.md`, `per-question.csv` and client reports read it instead of counting again. Failure types are grade.py's types split by question type, for example a made-up answer on a question that needs two documents becomes `stitched_rule`; `findings.yaml` explains each one. To change a pass or fail after a run, add a ruling to `audit-notes.yaml` in the run folder and rebuild with `.venv/Scripts/python audit/report.py output/audit/<time> --bank <bank>`; the graded result stays next to the ruled one. `audit/notes.py` checks a client report's hand-written notes against the dataset (no numbers typed by hand except inside `[[file p.N: quote]]`, which must match the document word for word; examples must match a real failure; every failure type needs a fix estimate).
 
 Telemetry and update checks are turned off in `run.py`. Nothing is shared unless you run `promptfoo share` yourself.
 

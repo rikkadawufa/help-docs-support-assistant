@@ -6,7 +6,7 @@ Usage:
       --target audit/targets/cinderpeak-baseline.json --target audit/targets/cinderpeak-grounded.json --repeat 3
 
 Each run gets its own folder under output/audit/: the generated promptfoo config,
-promptfoo's raw results.json, and the report (report.md, per-question.csv).
+promptfoo's raw results.json, and the report (dataset.json, report.md, per-question.csv).
 Grading is audit/grade.py (code only, no LLM). The report is audit/report.py.
 """
 from __future__ import annotations
@@ -92,7 +92,7 @@ def main() -> None:
     results = out / "results.json"
     if not results.exists():
         sys.exit("promptfoo did not write results.json; see its output above")
-    report.write(results, bank, out, repeat=args.repeat, bank_path=args.bank)
+    report.write(results, bank, out, bank_path=args.bank)
     print("report:", rel(out / "report.md", ROOT))
 
 

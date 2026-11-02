@@ -1,0 +1,112 @@
+# One entry per failure type that report.py can produce (grade.py's type, split by question type).
+# Generic wording only: nothing here names a client, a document or a number.
+# Client reports take titles, explanations, default risk, fixes and re-test checks from here;
+# each audit's own notes (audit-notes.yaml in the run folder) add the verdict, examples and hours.
+
+- id: stitched_rule
+  applies_to_kind: trap_stitching
+  title: States a rule the business never wrote, by combining two documents
+  plain: Asked something no single document answers, it joins facts from two documents into a rule that neither one states.
+  why_it_matters: The answer cites a real page, so customers and agents will trust it, but nobody at the business ever made that rule.
+  default_risk: high
+  fix_template: Before answering, check that each rule in the answer is stated in one cited sentence; if the answer needs two documents to make a rule, hand off
+  retest: No made-up answers on rule-stitching questions, and plain questions still pass
+
+- id: made_up_answer
+  applies_to_kind: trap_not_covered
+  title: Answers questions the documents don't cover
+  plain: Asked about something the documents never mention, it answers anyway instead of handing off.
+  why_it_matters: Customers act on answers that have no source, and the business is held to promises it never made.
+  default_risk: high
+  fix_template: Require each answer to rest on a retrieved passage that states it, and hand off when no passage does
+  retest: No made-up answers on questions the documents don't cover, and plain questions still pass
+
+- id: answered_account
+  applies_to_kind: account
+  title: Answers questions about one customer's order or account
+  plain: Asked about a specific order or account, which it cannot see, it answers from the general policy instead of handing off.
+  why_it_matters: The customer gets an answer about their own order that nobody checked against the order itself.
+  default_risk: high
+  fix_template: Detect order and account questions before retrieval and hand them to a person
+  retest: Every order and account question handed off, and plain questions still pass
+
+- id: premise_not_corrected
+  applies_to_kind: [trap_false_premise, trap_outdated]
+  title: Hands off wrong-assumption and old-policy questions instead of giving the current rule
+  plain: When a question rests on a wrong assumption or an old policy, it hands off even though a document states the current rule.
+  why_it_matters: These are the questions where a correct answer helps most, and every one of them lands on the support team.
+  default_risk: medium
+  fix_template: Rewrite the wrong-assumption rule so any passage that states the actual rule is answered and cited; add wrong-assumption and old-policy questions to the tuning set
+  retest: Wrong-assumption and old-policy questions answered with the current rule, and account questions still handed off
+
+- id: retrieval_miss
+  applies_to_kind:
+  title: Misses the right passage in retrieval
+  plain: The answer is in the documents, but search never returns that passage, so the assistant has nothing to quote and refuses.
+  why_it_matters: No prompt change can fix this; the question goes to a person every time until the index finds that page.
+  default_risk: medium
+  fix_template: Store table rows with their column headers (or add keyword search next to the vector search) and rebuild the index
+  retest: The missed questions retrieve the page that holds the answer
+
+- id: over_refusal
+  applies_to_kind: answerable
+  title: Refuses plain questions the documents answer
+  plain: The right passage was retrieved, but the assistant still said it couldn't answer.
+  why_it_matters: Each refusal sends an easy question to the support team, and the same question may get an answer the next time.
+  default_risk: low
+  fix_template: Relax the refusal check when a retrieved passage states the answer, and add the refused questions to the tuning set
+  retest: The refused questions are answered with the right source in every run
+
+- id: wrong_answer
+  applies_to_kind: answerable
+  title: Wrong or incomplete answer
+  plain: It answered, but the answer is missing a fact the documents state.
+  why_it_matters: Customers act on an answer that is wrong and looks confident.
+  default_risk: high
+  fix_template: Compare the answer with the source passage for each failed question, then tighten retrieval or the answer prompt to match
+  retest: The failed questions contain every expected fact
+
+- id: wrong_answer_right_source
+  applies_to_kind: answerable
+  title: Wrong or incomplete answer, though it cited the right page
+  plain: It found and cited the right page but left out or changed a fact on it.
+  why_it_matters: The citation makes a wrong answer look checked.
+  default_risk: medium
+  fix_template: Ask the model to quote the deciding sentence before it answers, and check the answer against that quote
+  retest: The failed questions contain every expected fact, still citing the right page
+
+- id: wrong_answer_wrong_source
+  applies_to_kind: answerable
+  title: Wrong or incomplete answer, citing the wrong page
+  plain: It answered from a page that does not hold the answer.
+  why_it_matters: The answer is wrong and the citation sends anyone who checks it to the wrong place.
+  default_risk: high
+  fix_template: Improve ranking so the page with the answer comes first, and hand off when the top passages disagree
+  retest: The failed questions cite the expected page and contain every expected fact
+
+- id: wrong_answer_no_source
+  applies_to_kind: answerable
+  title: Wrong or incomplete answer, with no source
+  plain: It answered without citing anything, and the answer is missing a fact the documents state.
+  why_it_matters: Nobody can check where the answer came from.
+  default_risk: high
+  fix_template: Require a citation for every answer and hand off when there is none
+  retest: Every answer cites a source, and the failed questions contain every expected fact
+
+- id: wrong_citation
+  applies_to_kind: answerable
+  title: Right answer, but the citation points to the wrong file or page
+  plain: The answer is right, but the cited page does not support it.
+  why_it_matters: Agents who check the citation will doubt a correct answer, or trust a page that says something else.
+  default_risk: low
+  fix_template: Cite the passage the answer was taken from instead of the top-ranked one
+  retest: The failed questions cite the expected file and page
+
+- id: bad_response
+  applies_to_kind:
+  title: The API reply could not be read
+  plain: The system returned something the test could not parse, such as an error page or a timeout.
+  why_it_matters: Customers see an error instead of an answer.
+  default_risk: medium
+  fix_template: Find the error in the API logs for these questions and fix the cause
+  retest: Every question gets a readable reply

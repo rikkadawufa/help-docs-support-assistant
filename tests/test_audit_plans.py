@@ -127,8 +127,18 @@ def test_verdict_against_the_thresholds_needs_a_reason():
 
 
 def test_unset_thresholds_block_the_report():
-    errors = check(dict(STARTER_NOTES, verdict_choice="go"), STARTER)  # plans.yaml as shipped: not decided yet
-    assert any("verdict thresholds not set yet" in e for e in errors)
+    errors = check(dict(STARTER_NOTES, verdict_choice="go"), starter(go_plain_pct_min=None))
+    assert any("verdict thresholds not set yet (go_plain_pct_min)" in e for e in errors)
+
+
+def test_shipped_thresholds_are_set_and_judge_the_audited_assistant_only():
+    assert STARTER["thresholds"] == {"go_plain_pct_min": 90, "go_made_up_pct_max": 10,
+                                     "no_go_plain_pct_below": 70, "no_go_made_up_pct_above": 30}
+    data = report.build_dataset(results(), BANK, [])
+    base = N.Context(STARTER_NOTES, data, Path(".")).values
+    swapped = N.Context(dict(STARTER_NOTES, systems={"audited": A, "baseline": A}), data, Path(".")).values
+    # changing the comparison system changes nothing the verdict reads
+    assert N.suggested_verdict(base, STARTER["thresholds"]) == N.suggested_verdict(swapped, STARTER["thresholds"])
 
 
 def test_suggested_verdict():

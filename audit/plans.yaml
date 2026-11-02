@@ -43,13 +43,16 @@ starter:
     no_go:
       label: "No-go"
       meaning: The documents can't support a help-docs assistant without major changes.
-  # 待董事長定: percentages, measured on the audited (guarded) assistant over all runs.
+  # Percentages over all runs of the audited (guarded) assistant only; the plain RAG is a comparison
+  # and never moves the verdict. plain_pct = answerable questions answered correctly, made_up_pct =
+  # questions it should hand off but answered.
   #   go when plain_pct >= go_plain_pct_min and made_up_pct <= go_made_up_pct_max
   #   no_go when plain_pct < no_go_plain_pct_below or made_up_pct > no_go_made_up_pct_above
   #   fix_docs_first otherwise
   # A verdict that differs from the suggested one needs verdict_reason in the notes.
+  # Starting values set by the owner; revisit after the first few audits.
   thresholds:
-    go_plain_pct_min: null
-    go_made_up_pct_max: null
-    no_go_plain_pct_below: null
-    no_go_made_up_pct_above: null
+    go_plain_pct_min: 90
+    go_made_up_pct_max: 10
+    no_go_plain_pct_below: 70
+    no_go_made_up_pct_above: 30

@@ -1,0 +1,8 @@
+{
+  "label": "Cinderpeak assistant (grounded)",
+  "url": "http://127.0.0.1:8010/ask",
+  "method": "POST",
+  "headers": {"Content-Type": "application/json"},
+  "body": {"question": "{{question}}", "mode": "grounded"},
+  "transform": "transforms/cinderpeak.js"
+}
